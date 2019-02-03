@@ -18,6 +18,8 @@
   },
   "homepage": "https://github.com/emnh/js-commander-example#readme",
   "dependencies": {
+    "jquery": "^3.3.1",
+    "three": "^0.101.1",
     "webpack": "^4.29.0",
     "webpack-cli": "^3.2.1",
     "webpack-dev-server": "^3.1.14"
