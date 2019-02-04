@@ -9,6 +9,8 @@ const javascript = require('highlight.js/lib/languages/javascript');
 hljs.registerLanguage('javascript', javascript);
 require('highlight.js/styles/dracula.css');
 
+const tree = require('./tree.js');
+
 const steps = [];
 
 function resetTarget(state) {
@@ -127,39 +129,115 @@ function clickStep(i) {
     const jstr = function(obj) {
       return JSON.stringify(obj, null, 2);
     };
-    var first = true;
+    
+    $("#stepCode").append(`
+    <div>
+      <label>Search: <input id="input1"/></label>
+    </div>
+    <table id="tree">
+      <colgroup>
+      <col width="30px">
+      <col width="10px">
+      <col width="200px">
+      <col width="200px">
+	  <col width="10px">
+      </colgroup>
+      <thead>
+        <tr>
+			<th></th>
+			<th>#</th>
+			<th>Function</th>
+			<th>Code</th>
+			<th></th>
+		</tr>
+      </thead>
+      <tbody>
+        <!-- Define a row template for all invariant markup: -->
+        <tr>
+          <td class="alignCenter"></td>
+          <td></td>
+          <td></td>
+          <td>
+			<pre style='display: inline-block; margin: 0px;'></pre>
+		  </td>
+		  <td></td>
+        </tr>
+      </tbody>
+    </table>
+	`);
+    $("#tree pre").append("<code class='hljs javascript'/>");
+    
+    const renderColumns = function(event, data) {
+      var node = data.node;
+      var $tdList = $(node.tr).find(">td");
+
+      // (Index #0 is rendered by fancytree by adding the checkbox)
+      // Set column #1 info from node data:
+      $tdList.eq(1).text(node.getIndexHier());
+      // (Index #2 is rendered by fancytree)
+      // Set column #3 info from node data:
+      $tdList.eq(3).find("code").html(node.data.code);
+      //$tdList.eq(4).find("code").html(node.data.state);
+    };
+    
+    tree.addTree("#stepCode", renderColumns);
+    const ftree = $("#tree").fancytree("getTree");
+    
+    const allCode = [];
+    
     const callback = function(data) {
       const before = jstr(data.oldState);
       const code = data.fn;
       const after = jstr(data.newState);
-      if (first) {
-      	$("#stepCode").append("<a href='#' class='showstate'>Show state</a>");
-        $("#stepCode").append(
-          "<pre class='state hidden'>" +
-          "<code class='hljs javascript'>" +
-          "state = " + hljs.highlight('javascript', before).value + ";" +
-          "</code>" +
-          "</pre>");
-        first = false;
-      }
       const hicode = hljs.highlight('javascript', code).value;
-      $("#stepCode")
-        .append(
-        	"<div><pre style='display: inline-block;'>" + 
-            "<code class='hljs javascript'/></pre></div>")
-        .find("code").last().html(hicode);
-      $("#stepCode").append("<a href='#' class='showstate'>Show state</a>");
-      $("#stepCode").append(
-        "<pre class='state hidden'>" +
-        "<code class='hljs javascript'>" +
-        "state = " + hljs.highlight('javascript', after).value + ";" +
-        "</code>" +
-        "</pre>");
+      const afterCode =
+      	"state = " + hljs.highlight('javascript', after).value + ";";
+      const title = code.match(/function ([^ (]+)/)[1];
+      allCode.push(hicode);
+      
+      ftree.rootNode.addChildren({
+        title: title,
+        folder: true,
+        //expanded: true,
+        children: [
+          {
+            title: "Body",
+            code: hicode
+          },
+          {
+            title: "Returned State",
+            folder: true,
+            children: [{
+              title: "",
+              code: afterCode
+            }]
+          }
+        ]
+      });
     };
+    
     evaluate(step, 'main', undefined, callback);
-    $("#stepCode a.showstate").click(function(evt) {
-      $(evt.target).next("pre.state").toggleClass("hidden");
-    });
+ 
+    /*
+    ftree.rootNode.addChildren({
+        title: 'All the code',
+        folder: true,
+        expanded: true,
+        children: [
+          {
+            title: "Body",
+            code: allCode.join('\n\n')
+          }
+        ]
+      });
+    */
+    
+    $("#stepCode")
+        .append(
+      		"<h2 style='margin-block-end: 0px;'>All the code:</h2>" +
+        	"<pre style='display: inline-block; margin-top: 0px;'>" + 
+            "<code class='hljs javascript'/></pre>")
+        .find("code").last().html(allCode.join('\n\n'));
   };
 }
 
@@ -187,11 +265,11 @@ pre code {
   }
   $("body").append("<div " + 
       "style='padding-left: 20px; border: 1px solid black; " +
-      "float: left; width: 45vw; height: 90vh; overflow: scroll;' " +
+      "float: left; width: 45vw; height: 95vh; overflow: scroll;' " +
       " id='stepCode'></div>");
   $("body").append("<div " + 
       "style='border: 1px solid black; " +
-      "float: left; width: 45vw; height: 90vh;' " +
+      "float: left; width: 40vw; height: 95vh;' " +
       " id='stepContent'></div>");
 }
 setupTutorial();
