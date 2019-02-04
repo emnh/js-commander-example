@@ -51,16 +51,6 @@ function drawSplit(canvas, ctx, color1, color2) {
   ctx.fillRect(0, split, canvas.width, canvas.height  - split);
 }
 
-function drawToCanvas(state) {
-  drawSplit(state.canvas, state.ctx, "orange", "black");
-  return state;
-}
-
-function drawToCanvas2(state) {
-  drawSplit(state.canvas, state.ctx, "red", "green");
-  return state;
-}
-
 const immer = require("immer");
 const produce = immer.produce;
 
@@ -74,7 +64,13 @@ steps.push({
     addCanvas: [addCanvas],
     resizeCanvas: [resizeCanvas],
     get2DContext: [get2DContext],
-    draw: [drawToCanvas],
+    draw: [
+      { 
+       call: drawSplit,
+       args: state => ([state.canvas, state.ctx, "orange", "black"]),
+       ret: (state, x) => state
+      }
+    ],
     main: [
       'getLibs',
       'resetTarget',
@@ -89,7 +85,13 @@ steps.push({
 
 steps.push(produce(steps[0], s => {
   s.parent = steps[0];
-  s.funtree.drawToCanvas = [drawToCanvas2];
+  s.funtree.draw = [
+    { 
+       call: drawSplit,
+       args: state => ([state.canvas, state.ctx, "red", "green"]),
+       ret: (state, x) => state
+      }
+  ];
 }, function(patches, inversePatches) {
   //console.log("patches", patches);
 }));

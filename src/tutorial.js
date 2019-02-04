@@ -21,7 +21,26 @@ export function evaluate(step, fname, state, callback, noeval) {
     const fn = fns[i];
     const oldState = newState;
     if (typeof fn === 'string') {
+      console.log("fns", fn);
       newState = evaluate(step, fn, newState, callback, noeval);
+    } else if (fn.hasOwnProperty('call')) {
+      const fn2 = fn.call;
+      const efn = function(state) {
+        const args = fn.args(state);
+      	const ret = fn2.apply(null, args);
+        newState = fn.ret(state, ret);
+      };
+      if (noeval === undefined) {
+        efn(newState);
+      }
+      if (callback !== undefined) {
+        callback({
+          oldState: oldState,
+          newState: newState,
+          fn: fn2.toString(),
+          fnRaw: efn
+        });
+      }
     } else {
       if (noeval === undefined) {
       	newState = fn(newState);
