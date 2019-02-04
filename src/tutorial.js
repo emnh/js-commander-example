@@ -14,30 +14,41 @@ const highlight = require('highlighter')();
 
 const tree = require('./tree.js');
 
-export function evaluate(step, fname, state, callback, noeval) {
+export function evaluateCall(state, fn) {
+  const args = fn.args(state);
+  const ret = fn.call.apply(null, args);
+  return fn.ret(state, ret);
+}
+
+export function evaluate(step, fname, state, callback, noeval, mainBody) {
   const fns = step.funtree[fname];
   let newState = state === undefined ? step.state : state;
+  const toplevel = mainBody === undefined;
+  if (toplevel) {
+    mainBody = [
+      'function ' + fname + '(state) {',
+      '  // tutorial.evaluate(step, "main"); is equivalent to the following:'
+    ];
+  }
   for (let i = 0; i < fns.length; i++) {
     const fn = fns[i];
     const oldState = newState;
     if (typeof fn === 'string') {
       console.log("fns", fn);
-      newState = evaluate(step, fn, newState, callback, noeval);
+      newState = evaluate(step, fn, newState, callback, noeval, mainBody);
     } else if (fn.hasOwnProperty('call')) {
-      const fn2 = fn.call;
       const efn = function(state) {
-        const args = fn.args(state);
-      	const ret = fn2.apply(null, args);
-        newState = fn.ret(state, ret);
+        return evaluateCall(state, fn);
       };
       if (noeval === undefined) {
-        efn(newState);
+        newState = efn(newState);
       }
+      mainBody.push('  state = (' + fn.ret + ')(state, '  + fn.call.name + '.apply(null, (' + fn.args + ')(state)));');
       if (callback !== undefined) {
         callback({
           oldState: oldState,
           newState: newState,
-          fn: fn2.toString(),
+          fn: fn.call.toString(),
           fnRaw: efn
         });
       }
@@ -45,6 +56,7 @@ export function evaluate(step, fname, state, callback, noeval) {
       if (noeval === undefined) {
       	newState = fn(newState);
       }
+      mainBody.push('  state = ' + fn.name + '(state);');
       if (callback !== undefined) {
         callback({
           oldState: oldState,
@@ -57,6 +69,15 @@ export function evaluate(step, fname, state, callback, noeval) {
     if (newState === null || newState === undefined) {
       throw new Error("no state returned");
     }
+  }
+  if (toplevel) {
+    mainBody.push('}');
+    callback({
+      oldState: state,
+      newState: newState,
+      fn: mainBody.join('\n'),
+      fnRaw: state => newState
+    });
   }
   return newState;
 }
