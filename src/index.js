@@ -3,11 +3,14 @@
 const $ = require('jquery');
 const immer = require("immer");
 const produce = immer.produce;
+const jsdiff = require('diff');
 
 const hljs = require('highlight.js/lib/highlight');
 const javascript = require('highlight.js/lib/languages/javascript');
 hljs.registerLanguage('javascript', javascript);
 require('highlight.js/styles/dracula.css');
+
+const highlight = require('highlighter')();
 
 const tree = require('./tree.js');
 
@@ -43,31 +46,39 @@ function get2DContext(state) {
   });
 }
 
+function drawSplit(canvas, ctx, color1, color2) {
+  const mid = canvas.height / 2;
+  const split = Math.floor(mid + mid * Math.sin(new Date().getTime() / 1000.0));
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = color1;
+  ctx.fillRect(0, 0, canvas.width, split);
+  ctx.fillStyle = color2;
+  ctx.fillRect(0, split, canvas.width, canvas.height  - split);
+}
+
 function drawToCanvas(state) {
-  const canvas = state.canvas;
-  const ctx = state.ctx;
-  ctx.fillStyle = "orange";
-  ctx.fillRect(0, 0, canvas.width, canvas.height / 2);
-  ctx.fillStyle = "black";
-  ctx.fillRect(0, canvas.height / 2, canvas.width, canvas.height / 2);
+  drawSplit(state.canvas, state.ctx, "orange", "black");
   return state;
 }
 
-function evaluate(step, fname, state, callback) {
+function evaluate(step, fname, state, callback, noeval) {
   const fns = step.funtree[fname];
   let newState = state === undefined ? step.state : state;
   for (let i = 0; i < fns.length; i++) {
     const fn = fns[i];
     const oldState = newState;
     if (typeof fn === 'string') {
-      newState = evaluate(step, fn, newState, callback);
+      newState = evaluate(step, fn, newState, callback, noeval);
     } else {
-      newState = fn(newState);
+      if (noeval === undefined) {
+      	newState = fn(newState);
+      }
       if (callback !== undefined) {
         callback({
           oldState: oldState,
           newState: newState,
-          fn: fn.toString()
+          fn: fn.toString(),
+          fnRaw: fn
         });
       }
     }
@@ -92,31 +103,30 @@ steps.push({
       'resizeCanvas',
       'get2DContext',
       'drawToCanvas'
-    ]
+    ],
+    anim: ['drawToCanvas']
   }
 });
 //evaluate(steps[0], 'main');
 
 function drawToCanvas2(state) {
-  const canvas = state.canvas;
-  const ctx = state.ctx;
-  ctx.fillStyle = "red";
-  ctx.fillRect(0, 0, canvas.width, canvas.height / 2);
-  ctx.fillStyle = "black";
-  ctx.fillRect(0, canvas.height / 2, canvas.width, canvas.height / 2);
+  drawSplit(state.canvas, state.ctx, "red", "green");
   return state;
 }
 
 steps.push(produce(steps[0], step2 => {
+  step2.parent = steps[0];
   step2.funtree.drawToCanvas = [drawToCanvas2];
 }, function(patches, inversePatches) {
-  console.log("patches", patches);
+  //console.log("patches", patches);
 }));
 //evaluate(steps[1], 'main');
 
-function clickStep(i) {
+function clickStep(animationFrameFuns, steps, i) {
   return function() {
+    animationFrameFuns.length = 0;
     $("#stepCode").empty();
+    
     $("#stepCode").append("<h1>Code for step " + (i + 1) + "</h1>");
     $("#stepCode").append(
       "<p>" +
@@ -193,7 +203,7 @@ function clickStep(i) {
       const afterCode =
       	"state = " + hljs.highlight('javascript', after).value + ";";
       const title = code.match(/function ([^ (]+)/)[1];
-      allCode.push(hicode);
+      allCode.push(code);
       
       ftree.rootNode.addChildren({
         title: title,
@@ -216,7 +226,25 @@ function clickStep(i) {
       });
     };
     
-    evaluate(step, 'main', undefined, callback);
+    const allParentCode = [];
+    const parentCallback = function(data) {
+      allParentCode.push(data.fn);
+    };
+    if (step.parent !== undefined) {
+      evaluate(step.parent, 'main', undefined, parentCallback, true);
+    }
+    const mainState = evaluate(step, 'main', undefined, callback);
+    
+    const flattened = [];
+    evaluate(step, 'anim', undefined, function(data) {
+      flattened.push(function() {
+        data.fnRaw(mainState);
+      });
+    }, true);
+    
+    for (let i = 0; i < flattened.length; i++) {
+    	animationFrameFuns.push(flattened[i]);
+    }
  
     /*
     ftree.rootNode.addChildren({
@@ -232,16 +260,39 @@ function clickStep(i) {
       });
     */
     
+    const hicode = hljs.highlight('javascript', allCode.join('\n\n')).value;
+    
+    if (step.parent !== undefined) {
+      const hicode2 =
+            hljs.highlight('javascript', allParentCode.join('\n\n')).value;
+      const a = allParentCode.join('\n\n');
+      const b = allCode.join('\n\n');
+      //const diff = jsdiff.diffWords(a, b); //hicode2, hicode);
+      const patch =
+            jsdiff.createPatch('step', a, b, '', '');
+      //const xmldiff = jsdiff.convertChangesToXML(diff);
+      //const hicode3 =
+      //      hljs.highlight('javascript', xmldiff).value;
+      
+      const hipatch = highlight(patch, 'js.diff');
+      $("#stepCode")
+        .append(
+      		"<h2 style='margin-block-end: 0px;'>Difference from parent step:</h2>" +
+        	"<pre style='display: inline-block; margin-top: 0px;'>" + 
+            "<code class='hljs javascript'/></pre>")
+        .find("code").last().html(hipatch);
+    }
+    
     $("#stepCode")
         .append(
       		"<h2 style='margin-block-end: 0px;'>All the code:</h2>" +
         	"<pre style='display: inline-block; margin-top: 0px;'>" + 
             "<code class='hljs javascript'/></pre>")
-        .find("code").last().html(allCode.join('\n\n'));
+        .find("code").last().html(hicode);
   };
 }
 
-function setupTutorial() {
+function setupTutorial(steps) {
   $("body").append("<ul style='float: left; margin-right: 20px;' id='steps'/>");
   $("body").append(`
 <style>
@@ -252,16 +303,33 @@ function setupTutorial() {
 	display: none;
 }
 pre code {
-  font: normal 10pt Consolas, Monaco, monospace;
+	font: normal 10pt Consolas, Monaco, monospace;
+}
+.diff-addition {
+	background: darkgreen;
+}
+.diff-deletion {
+	background: darkred;
 }
 </style>
 `);
+  const animationFrameFuns = [];
+  
+  function update() {
+    for (let i = 0; i < animationFrameFuns.length; i++) {
+      const fn = animationFrameFuns[i];
+      fn();
+    }
+  	requestAnimationFrame(update);
+  }
+  update();
+  
   for (var i = 0; i < steps.length; i++) {
     $("#steps").append(
       "<li id='step" + i + "'><a href='#'><h2>Step " +
       (i + 1) +
       "</h2></a></li>");
-    $("#step" + i).click(clickStep(i));
+    $("#step" + i).click(clickStep(animationFrameFuns, steps, i));
   }
   $("body").append("<div " + 
       "style='padding-left: 20px; border: 1px solid black; " +
@@ -271,6 +339,6 @@ pre code {
       "style='border: 1px solid black; " +
       "float: left; width: 40vw; height: 95vh;' " +
       " id='stepContent'></div>");
+  clickStep(animationFrameFuns, steps, 0)();
 }
-setupTutorial();
-clickStep(0)();
+setupTutorial(steps);
