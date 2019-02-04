@@ -4,6 +4,11 @@ const $ = require('jquery');
 const immer = require("immer");
 const produce = immer.produce;
 
+const hljs = require('highlight.js/lib/highlight');
+const javascript = require('highlight.js/lib/languages/javascript');
+hljs.registerLanguage('javascript', javascript);
+require('highlight.js/styles/dracula.css');
+
 const steps = [];
 
 function resetTarget(state) {
@@ -102,6 +107,8 @@ function drawToCanvas2(state) {
 
 steps.push(produce(steps[0], step2 => {
   step2.funtree.drawToCanvas = [drawToCanvas2];
+}, function(patches, inversePatches) {
+  console.log("patches", patches);
 }));
 //evaluate(steps[1], 'main');
 
@@ -120,20 +127,57 @@ function clickStep(i) {
     const jstr = function(obj) {
       return JSON.stringify(obj, null, 2);
     };
+    var first = true;
     const callback = function(data) {
       const before = jstr(data.oldState);
       const code = data.fn;
       const after = jstr(data.newState);
-      //$("#stepCode").append("<h3>Before</h3><pre>" + before + "</pre>");
-      $("#stepCode").append("<pre/>").find("pre").last().text(code);
-      //$("#stepCode").append("<h3>After</h3><pre>" + after + "</pre>");
+      if (first) {
+      	$("#stepCode").append("<a href='#' class='showstate'>Show state</a>");
+        $("#stepCode").append(
+          "<pre class='state hidden'>" +
+          "<code class='hljs javascript'>" +
+          "state = " + hljs.highlight('javascript', before).value + ";" +
+          "</code>" +
+          "</pre>");
+        first = false;
+      }
+      const hicode = hljs.highlight('javascript', code).value;
+      $("#stepCode")
+        .append(
+        	"<div><pre style='display: inline-block;'>" + 
+            "<code class='hljs javascript'/></pre></div>")
+        .find("code").last().html(hicode);
+      $("#stepCode").append("<a href='#' class='showstate'>Show state</a>");
+      $("#stepCode").append(
+        "<pre class='state hidden'>" +
+        "<code class='hljs javascript'>" +
+        "state = " + hljs.highlight('javascript', after).value + ";" +
+        "</code>" +
+        "</pre>");
     };
     evaluate(step, 'main', undefined, callback);
+    $("#stepCode a.showstate").click(function(evt) {
+      $(evt.target).next("pre.state").toggleClass("hidden");
+    });
   };
 }
 
 function setupTutorial() {
   $("body").append("<ul style='float: left; margin-right: 20px;' id='steps'/>");
+  $("body").append(`
+<style>
+.state {
+	border: 1px solid black;
+}
+.hidden {
+	display: none;
+}
+pre code {
+  font: normal 10pt Consolas, Monaco, monospace;
+}
+</style>
+`);
   for (var i = 0; i < steps.length; i++) {
     $("#steps").append(
       "<li id='step" + i + "'><a href='#'><h2>Step " +
