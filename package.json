@@ -18,6 +18,8 @@
   },
   "homepage": "https://github.com/emnh/js-commander-example#readme",
   "dependencies": {
+    "diff": "^4.0.1",
+    "highlight.js": "^9.14.2",
     "immer": "^2.0.0",
     "jquery": "^3.3.1",
     "three": "^0.101.1",
