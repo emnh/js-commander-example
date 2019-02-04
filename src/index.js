@@ -43,7 +43,7 @@ function get2DContext(state) {
 
 function drawSplit(canvas, ctx, color1, color2) {
   const mid = canvas.height / 2;
-  const split = Math.floor(mid + mid * Math.sin(new Date().getTime() * 5.0 / 1000.0) / 2);
+  const split = Math.floor(mid + mid * Math.sin(new Date().getTime() * 1.0 / 1000.0) / 2);
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.fillStyle = color1;
   ctx.fillRect(0, 0, canvas.width, split);
