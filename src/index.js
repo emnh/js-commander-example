@@ -1,6 +1,8 @@
 /*jshint esversion: 6 */
 
 const webgl = require('./webgl.js');
+const editor = require('./editor.js');
+const tutorial = require('./tutorial.js');
 
 function getLibs(state) {
   const $ = require('jquery');
@@ -201,7 +203,7 @@ function addColorConfig(state, name, value) {
   return state;
 }
 
-(function() {
+require('jquery')(function() {
   const immer = require("immer");
   const produce = immer.produce;
 
@@ -327,6 +329,6 @@ function addColorConfig(state, name, value) {
     ];
   }));
 
-  const tutorial = require('./tutorial.js');
+  editor.main();
   tutorial.setupTutorial(steps);
-})();
+});
