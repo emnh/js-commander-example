@@ -43,6 +43,9 @@ export function evaluate(step, fname, state, callback, noeval, mainBody) {
       };
       if (noeval === undefined) {
         newState = efn(newState);
+        if (newState === null || newState === undefined) {
+          throw new Error("no state returned");
+        }
       }
       mainBody.push('  state = (' + fn.ret + ')(state, '  + fn.call.name + '.apply(null, (' + fn.args + ')(state)));');
       if (callback !== undefined) {
@@ -56,6 +59,9 @@ export function evaluate(step, fname, state, callback, noeval, mainBody) {
     } else {
       if (noeval === undefined) {
       	newState = fn(newState);
+        if (newState === null || newState === undefined) {
+          throw new Error("no state returned");
+        }
       }
       mainBody.push('  state = ' + fn.name + '(state);');
       if (callback !== undefined) {
@@ -66,9 +72,6 @@ export function evaluate(step, fname, state, callback, noeval, mainBody) {
           fnRaw: fn
         });
       }
-    }
-    if (newState === null || newState === undefined) {
-      throw new Error("no state returned");
     }
   }
   if (toplevel && fname === 'main') {
@@ -84,12 +87,14 @@ export function evaluate(step, fname, state, callback, noeval, mainBody) {
 }
 
 
-function loadStep(animationFrameFuns, steps, i) {
+function loadStep(animationFrameFuns, steps, id, i) {
   return function() {
     animationFrameFuns.length = 0;
     $("#stepCode").empty();
-
-    $("#stepCode").append("<h2>Code for step " + (i + 1) + "</h2>");
+    $("#stepCode")
+      .append(
+        "<h2>Code for step " + id + ': ' +
+        steps[i].title.join(' ') + "</h2>");
     $("#stepCode").append(
       "<p>" +
       "Functions are evaluated in order " +
@@ -212,20 +217,6 @@ function loadStep(animationFrameFuns, steps, i) {
     	animationFrameFuns.push(flattened[i]);
     }
 
-    /*
-    ftree.rootNode.addChildren({
-        title: 'All the code',
-        folder: true,
-        expanded: true,
-        children: [
-          {
-            title: "Body",
-            code: allCode.join('\n\n')
-          }
-        ]
-      });
-    */
-
     const hicode = hljs.highlight('javascript', allCode.join('\n\n')).value;
 
     if (step.parent !== undefined) {
@@ -312,18 +303,37 @@ pre code {
   }
   update();
 
-  for (var i = 0; i < steps.length; i++) {
-    $("#steps").append(
-      "<li class='folder' id='step" + i + "'>" +
-      (i + 1) + ': ' + steps[i].title +
+  const seen = {};
+  let i = 0;
+  for (let k = 0; k < steps.length; k++) {
+    const prefix = steps[k].title[0];
+    const isNewPrefix = seen[prefix] === undefined;
+    const j =
+        Object.keys(seen).length + (isNewPrefix ? 1 : 0);
+    if (isNewPrefix) {
+      $("#steps").append(
+        "<li class='folder expanded'>" +
+        j + ': ' + prefix +
+        "<ul id='prefix" + j + "'/></li>");
+      i = 0;
+    } else {
+      i++;
+    }
+    seen[prefix] = true;
+    $("#prefix" + j).append(
+      "<li class='folder' id='step" + j + '.' + (i + 1) + '.' + k + "'>" +
+      j + '.' + (i + 1) + ': ' + steps[k].title[steps[k].title.length - 1] +
       "</li>");
-    // $("#step" + i).click(loadStep(animationFrameFuns, steps, i));
   }
   $("#stepstree").fancytree({
       activate: function(event, data) {
-        const i = parseInt(data.node.key.match(/step([0-9]+)/)[1]);
-        loadStep(animationFrameFuns, steps, i)();
+        const m = data.node.key.match(/step([0-9]+)\.([0-9]+)\.([0-9]+)/);
+        if (m !== null) {
+          const id = m[1] + '.' + m[2];
+          const i = parseInt(m[3]);
+          loadStep(animationFrameFuns, steps, id, i)();
+        }
       },
     });
-  loadStep(animationFrameFuns, steps, 0)();
+  loadStep(animationFrameFuns, steps, '1.1', 0)();
 }
