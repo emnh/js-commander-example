@@ -41,12 +41,6 @@ function get2DContext(state) {
   });
 }
 
-function addStartTime(state) {
-  return state.produce(state, draftState => {
-    draftState.startTime = new Date().getTime() / 1000.0;
-  });
-}
-
 function drawSplit(canvas, ctx, color1, color2) {
   const mid = canvas.height / 2;
   const split = Math.floor(mid + mid * Math.sin(new Date().getTime() * 1.0 / 1000.0) / 2);
@@ -66,7 +60,9 @@ function addTick(state) {
     history.push(0);
   }
   const ret = {
+    startTime: counter,
     tick: tick,
+    frameIndex: 0,
     movingSum: 0,
     index: 0,
     sampleCount: 0,
@@ -77,6 +73,7 @@ function addTick(state) {
   };
   const f = (update) => {
     const nextCounter = performance.now() / 1000.0;
+    ret.frameIndex = update ? ret.frameIndex + 1 : ret.frameIndex;
     tick = update ? nextCounter - counter : tick;
     counter = update ? nextCounter : counter;
     ret.history[ret.index] = update ? tick : ret.history[ret.index];
@@ -109,46 +106,12 @@ function addAndUpdateTick(funtree) {
   funtree.anim.unshift(updateTick);
 }
 
-function addCounter(state, name) {
-  var counter = 0;
-  const f = (update) => {
-    const oldCounter = counter;
-    counter = update ? counter + 1 : counter;
-    return oldCounter;
-  };
-  return state.produce(state, s => {
-  	s[name] = f;
-  });
-}
-
-function updateCounter(state, name) {
-  state[name](true);
-  return state;
-}
-
-function addAndUpdateCounter(funtree, name) {
-  funtree[name] = [
-    {
-      call: addCounter,
-      args: state => ([state, name]),
-      ret: (state, x) => x
-    }
-  ];
-  funtree.prepare.push(name);
-  funtree.anim.unshift(
-    {
-      call: updateCounter,
-      args: state => ([state, name]),
-      ret: (state, x) => x
-    });
-}
-
 function drawFPS(state, canvas, ctx, color1, color2) {
   const mid = canvas.height / 2;
   const time = new Date().getTime() / 1000.0;
   //const split = Math.floor(mid + mid * Math.sin(time) / 2);
-  const w = state.frameCounter() % canvas.width;
   const tick = state.tick();
+  const w = tick.frameIndex % canvas.width;
   const split = Math.floor((tick.fps / tick.maxfps) * 0.5 * canvas.height);
   ctx.font = "30px Arial";
   ctx.clearRect(0, 0, 150, 100);
@@ -223,9 +186,6 @@ function drawFPS(state, canvas, ctx, color1, color2) {
       }
     ];
     addAndUpdateTick(s.funtree);
-    addAndUpdateCounter(s.funtree, 'frameCounter');
-    s.funtree.addStartTime = [addStartTime];
-    s.funtree.prepare.push('addStartTime');
   }, function(patches, inversePatches) {
     //console.log("patches", patches);
   }));
