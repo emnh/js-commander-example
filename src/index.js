@@ -84,7 +84,10 @@ function addTick(state) {
     ret.movingSum += (update ? tick - sub : 0);
     ret.average = ret.movingSum / ret.sampleCount;
     ret.fps = 1.0 / ret.average;
-    ret.maxfps = Math.max(ret.fps, ret.maxfps);
+    ret.maxfps = 
+      ret.sampleCount >= historyLength ?
+      	Math.max(ret.fps, ret.maxfps) :
+    	ret.fps;
     ret.index = update ? (ret.index + 1) % historyLength : ret.index;
     ret.tick = tick;
     //console.log(ret.average);
@@ -107,15 +110,17 @@ function addAndUpdateTick(funtree) {
 }
 
 function drawFPS(state, canvas, ctx, color1, color2) {
-  const mid = canvas.height / 2;
-  const time = new Date().getTime() / 1000.0;
-  //const split = Math.floor(mid + mid * Math.sin(time) / 2);
   const tick = state.tick();
   const w = tick.frameIndex % canvas.width;
-  const split = Math.floor((tick.fps / tick.maxfps) * 0.5 * canvas.height);
+  const split = canvas.height - Math.floor((tick.fps / tick.maxfps) * 0.5 * canvas.height);
   ctx.font = "30px Arial";
-  ctx.clearRect(0, 0, 150, 100);
-  ctx.fillText(Math.floor(tick.fps).toString() + ' FPS', 10, 50);
+  ctx.fillStyle = color1;
+  ctx.clearRect(0, 0, 300, 100);
+  ctx.fillRect(0, 0, 300, 100);
+  ctx.fillStyle = color2;
+  ctx.fillText(
+    Math.floor(tick.fps).toString() + ' FPS / ' +
+    Math.floor(tick.maxfps).toString() + ' MAX', 10, 50);
   ctx.clearRect(w + 1, 0, 1, canvas.height);
   ctx.fillStyle = 'blue';
   ctx.fillRect(w + 1, 0, 1, canvas.height);
@@ -181,7 +186,7 @@ function drawFPS(state, canvas, ctx, color1, color2) {
     s.funtree.anim = [
       {
         call: drawFPS,
-        args: state => ([state, state.canvas, state.ctx, "red", "green"]),
+        args: state => ([state, state.canvas, state.ctx, "orange", "black"]),
         ret: (state, x) => state
       }
     ];
