@@ -203,7 +203,7 @@ function addColorConfig(state, name, value) {
   return state;
 }
 
-require('jquery')(function() {
+function main() {
   const immer = require("immer");
   const produce = immer.produce;
 
@@ -329,6 +329,27 @@ require('jquery')(function() {
     ];
   }));
 
-  editor.main();
   tutorial.setupTutorial(steps);
-});
+  
+  //console.log("main done");
+}
+
+if (module.hot) {
+  module.hot.accept(function() {
+	console.log('Problem accepting updated self!');
+  });
+
+  module.hot.decline('./editor.js');
+}
+
+if (window.loaded === undefined) {
+  require('jquery')(function() {
+    editor.main();
+	main();
+  });
+  window.loaded = true;
+} else {
+  require('jquery')(function() {
+    main();
+  });
+}
