@@ -99,10 +99,11 @@ function addTick(state) {
     ret.sampleCount = Math.min(historyLength, update ? ret.sampleCount + 1 : ret.sampleCount);
     const sub =
           ret.sampleCount >= historyLength ? 
-          	ret.history[(ret.index + historyLength - 1) % historyLength] : 0;
+          	ret.history[(ret.index + 1) % historyLength] : 0;
     ret.movingSum += (update ? tick - sub : 0);
-    ret.average = ret.movingSum / ret.sampleCount;
-    ret.fps = 1.0 / ret.average;
+    ret.average = ret.sampleCount > 1 ? ret.movingSum / (ret.sampleCount - 1) : 0;
+    //console.log("ms", 144 * tick, 144 * sub, ret.sampleCount - 1, 144 * ret.average);
+    ret.fps = ret.average > 0 ? 1.0 / ret.average : 0.0;
     ret.maxfps = 
       ret.sampleCount >= historyLength ?
       	Math.max(ret.fps, ret.maxfps) :
