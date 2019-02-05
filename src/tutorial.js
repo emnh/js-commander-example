@@ -29,12 +29,13 @@ export function evaluate(step, fname, state, callback, noeval, mainBody) {
       'function ' + fname + '(state) {',
       '  // tutorial.evaluate(step, "main"); is equivalent to the following:'
     ];
+  } else if (fname === 'anim') {
+    mainBody.push('  // the following is added to animation loop: ');
   }
   for (let i = 0; i < fns.length; i++) {
     const fn = fns[i];
     const oldState = newState;
     if (typeof fn === 'string') {
-      console.log("fns", fn);
       newState = evaluate(step, fn, newState, callback, noeval, mainBody);
     } else if (fn.hasOwnProperty('call')) {
       const efn = function(state) {
@@ -88,7 +89,7 @@ function loadStep(animationFrameFuns, steps, i) {
     animationFrameFuns.length = 0;
     $("#stepCode").empty();
 
-    $("#stepCode").append("<h1>Code for step " + (i + 1) + "</h1>");
+    $("#stepCode").append("<h2>Code for step " + (i + 1) + "</h2>");
     $("#stepCode").append(
       "<p>" +
       "Functions are evaluated in order " +
@@ -254,12 +255,8 @@ function loadStep(animationFrameFuns, steps, i) {
 }
 
 export function setupTutorial(steps) {
-  $("body").append("<ul style='float: left; margin-right: 20px;' id='steps'/>");
-  $("body").append(`
+  $("head").append(`
 <style>
-.state {
-	border: 1px solid black;
-}
 .hidden {
 	display: none;
 }
@@ -272,8 +269,34 @@ pre code {
 .diff-deletion {
 	background: darkred;
 }
+#stepstree {
+  /* border: 1px solid black; */
+  margin-bottom: 20px;
+}
+#leftside {
+  float: left;
+  height: 95vh;
+  width: 49vw;
+  overflow: scroll;
+}
+#stepContent {
+  border: 1px solid black;
+  float: left;
+  width: 49vw;
+  height: 95vh;
+}
 </style>
 `);
+  $("body").append(`
+    <div id='leftside'>
+      <h1>Steps</h1>
+      <div id='stepstree'>
+        <ul style='float: left; margin-right: 20px;' id='steps'/>
+      </div>
+      <div id='stepCode'></div>
+    </div>
+    <div id='stepContent'></div>
+  `);
   const animationFrameFuns = [];
 
   function update() {
@@ -287,18 +310,17 @@ pre code {
 
   for (var i = 0; i < steps.length; i++) {
     $("#steps").append(
-      "<li id='step" + i + "'><a href='#'><h2>Step " +
-      (i + 1) +
-      "</h2></a></li>");
-    $("#step" + i).click(loadStep(animationFrameFuns, steps, i));
+      "<li class='folder' id='step" + i + "'>" +
+      (i + 1) + ': ' + steps[i].title +
+      "</li>");
+    // $("#step" + i).click(loadStep(animationFrameFuns, steps, i));
   }
-  $("body").append("<div " +
-      "style='padding-left: 20px; border: 1px solid black; " +
-      "float: left; width: 45vw; height: 95vh; overflow: scroll;' " +
-      " id='stepCode'></div>");
-  $("body").append("<div " +
-      "style='border: 1px solid black; " +
-      "float: left; width: 40vw; height: 95vh;' " +
-      " id='stepContent'></div>");
+  $("#stepstree").fancytree({
+      activate: function(event, data) {
+        const i = parseInt(data.node.key.match(/step([0-9]+)/)[1]);
+        console.log(data.node, i);
+        loadStep(animationFrameFuns, steps, i)();
+      },
+    });
   loadStep(animationFrameFuns, steps, 0)();
 }
