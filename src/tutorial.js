@@ -279,6 +279,7 @@ pre code {
   float: left;
   width: 49vw;
   height: 95vh;
+  position: relative;
 }
 </style>
 `);
