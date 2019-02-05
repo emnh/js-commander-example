@@ -106,7 +106,7 @@ function updateTick(state) {
 function addAndUpdateTick(funtree) {
   funtree.addTick = [addTick];
   funtree.prepare.push('addTick');
-  funtree.anim.unshift(updateTick);
+  funtree.preAnim.push(updateTick);
 }
 
 function drawFPS(state, canvas, ctx, color1, color2) {
@@ -128,6 +128,55 @@ function drawFPS(state, canvas, ctx, color1, color2) {
   ctx.fillRect(w, 0, 1, split);
   ctx.fillStyle = color2;
   ctx.fillRect(w, split, 1, canvas.height - split);
+}
+
+function addConfig(state) {
+  let config = {};
+  const f = (name, value) => {
+    if (name === undefined) {
+      return config;
+    }
+    if (value === undefined) {
+      return config[name];
+    }
+    config = state.produce(config, c => {
+      c[name] = value;
+      c.lastUpdate = performance.now() / 1000.0;
+    });
+    return value;
+  };
+  state.$(state.target)
+  	.append("<div id='config' />")
+    .find("#config")
+    .css("position", "absolute")
+  	.css("top", "20px")
+  	.css("right", "40px");
+  return state.produce(state, s => {
+    s.config = f;
+  });
+}
+
+function serializeConfig(state) {
+  const config = state.config();
+  return (
+    state.sconfig !== undefined && config.lastUpdate === state.sconfig.lastUpdate ?
+      state :
+      state.produce(state, s => {
+        s.sconfig = config;
+      }));
+}
+
+function getColorConfig(state, name, value) {
+  state.$("#config")
+    .append("<input id='" + name + "' type='color' style='display: block;'/>")
+  	.find("#" + name)
+    .change((evt) => {
+      console.log(name, evt.target.value);
+      state.config(name, evt.target.value);
+    })
+  	.val(value);
+  state.config(name, value);
+  return state;
 }
 
 (function() {
@@ -183,7 +232,9 @@ function drawFPS(state, canvas, ctx, color1, color2) {
   steps.push(produce(steps[steps.length - 1], s => {
     s.title = 'Draw FPS';
     s.parent = steps[steps.length - 1];
-    s.funtree.anim = [
+    s.funtree.anim = ['preAnim', 'mainAnim'];
+    s.funtree.preAnim = [];
+    s.funtree.mainAnim = [
       {
         call: drawFPS,
         args: s => ([s, s.canvas, s.ctx, "orange", "black"]),
@@ -191,6 +242,36 @@ function drawFPS(state, canvas, ctx, color1, color2) {
       }
     ];
     addAndUpdateTick(s.funtree);
+  }, function(patches, inversePatches) {
+    //console.log("patches", patches);
+  }));
+  
+  steps.push(produce(steps[steps.length - 1], s => {
+    s.title = 'Configure Color';
+    s.parent = steps[steps.length - 1];
+    s.funtree.mainAnim = [
+      serializeConfig,
+      {
+        call: drawFPS,
+        args: s => ([s, s.canvas, s.ctx, s.config('color1'), s.config('color2')]),
+        ret: (s, x) => s
+      }
+    ];
+    s.funtree.addConfig = [addConfig];
+    s.funtree.prepare.push('addConfig');
+    s.funtree.getColorConfig = [
+      {
+        call: getColorConfig,
+        args: s => ([s, 'color1', '#ff0000']),
+        ret: (s, x) => x
+      },
+      {
+        call: getColorConfig,
+        args: s => ([s, 'color2', '#000000']),
+        ret: (s, x) => x
+      }
+    ];
+    s.funtree.prepare.push('getColorConfig');
   }, function(patches, inversePatches) {
     //console.log("patches", patches);
   }));
