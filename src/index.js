@@ -1,5 +1,7 @@
 /*jshint esversion: 6 */
 
+const webgl = require('./webgl.js');
+
 function getLibs(state) {
   const $ = require('jquery');
   const immer = require("immer");
@@ -23,8 +25,25 @@ function addCanvas(state) {
   target.css("margin", "0px");
   target.css("overflow", "hidden");
   const canvas = target.find("canvas")[0];
-  return state.produce(state, draftState => {
-    draftState.canvas = canvas;
+  return state.produce(state, s => {
+    s.canvas = canvas;
+  });
+}
+
+function addFPSCanvas(state) {
+  const target = state.$(state.target);
+  target.append("<canvas id='fpsCanvas' width='60' height='30'/>");
+  const jqCanvas = target.find("#fpsCanvas");
+  jqCanvas
+  	.css("position", "absolute")
+  	.css("top", "0px")
+  	.css("left", "0px");
+  	//.css("margin-top", "-" + 2 * state.$(state.target).height() + "px");
+  const canvas = jqCanvas[0];
+  const ctx = canvas.getContext("2d");
+  return state.produce(state, s => {
+    s.fpsCanvas = canvas;
+    s.fpsCtx = ctx;
   });
 }
 
@@ -38,20 +57,6 @@ function get2DContext(state) {
   const ctx = state.canvas.getContext("2d");
   return state.produce(state, s => {
     s.ctx = ctx;
-  });
-}
-
-function getGLContext(state) {
-  const gl = state.canvas.getContext("webgl");
-  
-  // Only continue if WebGL is available and working
-  if (gl === null) {
-    alert("Unable to initialize WebGL. Your browser or machine may not support it.");
-    throw new Error('no WebGL');
-  }
-  
-  return state.produce(state, s => {
-    s.gl = gl;
   });
 }
 
@@ -125,16 +130,18 @@ function addAndUpdateTick(funtree) {
 
 function drawFPS(state, canvas, ctx, color1, color2) {
   const tick = state.tick();
-  const w = tick.frameIndex % canvas.width;
+  const offset = 0; //canvas.width <= 90 ? canvas.width / 2 : 0;
+  const w = offset + tick.frameIndex % (canvas.width - offset);
   const split = canvas.height - Math.floor((tick.fps / tick.maxfps) * 0.5 * canvas.height);
-  ctx.font = "30px Arial";
+  ctx.font = "12px Arial";
   ctx.fillStyle = color1;
-  ctx.clearRect(0, 0, 300, 100);
-  ctx.fillRect(0, 0, 300, 100);
+  ctx.clearRect(0, 0, canvas.width - offset, 12);
+  ctx.fillRect(0, 0, canvas.width - offset, 12);
   ctx.fillStyle = color2;
   ctx.fillText(
-    Math.floor(tick.fps).toString() + ' FPS / ' +
-    Math.floor(tick.maxfps).toString() + ' MAX', 10, 50);
+    Math.floor(tick.fps).toString() +
+    //'(' + Math.floor(tick.maxfps).toString() + ')' +
+    ' FPS', 5, 12);
   ctx.clearRect(w + 1, 0, 1, canvas.height);
   ctx.fillStyle = 'blue';
   ctx.fillRect(w + 1, 0, 1, canvas.height);
@@ -190,28 +197,6 @@ function addColorConfig(state, name, value) {
     })
   	.val(value);
   state.config(name, value);
-  return state;
-}
-
-function hexToRgb(hex) {
-  var result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-  return result ? {
-    r: parseInt(result[1], 16) / 255.0,
-    g: parseInt(result[2], 16) / 255.0,
-    b: parseInt(result[3], 16) / 255.0
-  } : null;
-}
-
-function clearCanvas(state) {
-  const gl = state.gl;
-  
-  // Set clear color
-  const rgb = hexToRgb(state.config('color1'));
-  gl.clearColor(rgb.r, rgb.g, rgb.b, 1.0);
-  
-  // Clear the color buffer with specified clear color
-  gl.clear(gl.COLOR_BUFFER_BIT);
-  
   return state;
 }
 
@@ -298,7 +283,7 @@ function clearCanvas(state) {
     s.funtree.addColorConfig = [
       {
         call: addColorConfig,
-        args: s => ([s, 'color1', '#ff0000']),
+        args: s => ([s, 'color1', '#ff8040']),
         ret: (s, x) => x
       },
       {
@@ -317,9 +302,28 @@ function clearCanvas(state) {
   steps.push(produce(steps[steps.length - 1], s => {
     s.title = ['3D', 'Clear Canvas'];
     s.parent = steps[steps.length - 1];
-    s.funtree.getContext = [getGLContext];
-    s.funtree.clearCanvas = [clearCanvas];
+    s.funtree.getContext = [webgl.getGLContext];
+    s.funtree.clearCanvas = [webgl.clearCanvas];
     s.funtree.mainAnim = ['clearCanvas'];
+  }));
+  
+  steps.push(produce(steps[steps.length - 1], s => {
+    s.title = ['3D', 'Draw Square'];
+    s.parent = steps[steps.length - 1];
+    s.funtree.prepare.push(webgl.drawSquare);
+    s.funtree.prepare.push(addFPSCanvas);
+    s.funtree.mainAnim = [
+      {
+        call: drawFPS,
+        args: s => ([s, s.fpsCanvas, s.fpsCtx, 'green', 'pink']),
+        ret: (s, x) => s
+      },
+      {
+        call: webgl.drawScene,
+        args: s => ([s.gl, s.programInfo, s.buffers]),
+        ret: (s, x) => s
+      }
+    ];
   }));
 
   const tutorial = require('./tutorial.js');
