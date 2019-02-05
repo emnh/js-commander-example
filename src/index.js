@@ -148,8 +148,8 @@ function drawFPS(state, canvas, ctx, color1, color2) {
       anim: [
         { 
          call: drawSplit,
-         args: state => ([state.canvas, state.ctx, "orange", "black"]),
-         ret: (state, x) => state
+         args: s => ([s.canvas, s.ctx, "orange", "black"]),
+         ret: (s, x) => s
         }
       ],
       prepare: [
@@ -172,8 +172,8 @@ function drawFPS(state, canvas, ctx, color1, color2) {
     s.funtree.anim = [
       { 
          call: drawSplit,
-         args: state => ([state.canvas, state.ctx, "red", "green"]),
-         ret: (state, x) => state
+         args: s => ([s.canvas, s.ctx, "red", "green"]),
+         ret: (s, x) => s
         }
     ];
   }, function(patches, inversePatches) {
@@ -186,8 +186,8 @@ function drawFPS(state, canvas, ctx, color1, color2) {
     s.funtree.anim = [
       {
         call: drawFPS,
-        args: state => ([state, state.canvas, state.ctx, "orange", "black"]),
-        ret: (state, x) => state
+        args: s => ([s, s.canvas, s.ctx, "orange", "black"]),
+        ret: (s, x) => s
       }
     ];
     addAndUpdateTick(s.funtree);
