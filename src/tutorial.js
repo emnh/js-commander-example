@@ -249,17 +249,25 @@ function loadStep(animationFrameFuns, steps, id, i) {
   };
 }
 
-export function setupTutorial(steps) {
-  const animationFrameFuns = [];
-
-  function update() {
-    for (let i = 0; i < animationFrameFuns.length; i++) {
-      const fn = animationFrameFuns[i];
-      fn();
-    }
-  	requestAnimationFrame(update);
+function update() {
+  for (let i = 0; i < animationFrameFuns.length; i++) {
+    const fn = animationFrameFuns[i];
+    fn();
   }
-  update();
+  requestAnimationFrame(update);
+}
+
+export function setupTutorial(steps) {
+  if (window.animationFrameFuns === undefined) {
+    window.animationFrameFuns = [];
+    update();
+  }
+
+  $("#divSteps").empty().append(`
+    <div id='stepstree'>
+      <ul style='float: left; margin-right: 20px;' id='steps'/>
+    </div>
+    `);
 
   const seen = {};
   let i = 0;
