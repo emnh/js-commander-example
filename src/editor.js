@@ -37,8 +37,10 @@ function rebind(key, f, opts) {
   }
 }
 
-function getApp() {
-  $.get("/app", function(data) {
+function getApp(fname) {
+  $.get("/app", { fname: fname }, function(data) {
+    state.cm.getDoc().setValue(data);
+    /*
     const dp = JSON.parse(data);
     if (
       dp !== undefined &&
@@ -47,6 +49,7 @@ function getApp() {
       const code = dp[0].app;
       state.cm.getDoc().setValue(code);
     }
+    */
   });
 }
 
@@ -57,7 +60,10 @@ function save() {
     const parsed = esprima.parse(code);
     console.log(parsed);
 
+    const fname = $("filesTree").fancytree("getTree").getActiveNode().title;
+
     $.post("./postapp", {
+      fname: fname,
       value: code
     }, function(data) {
     });
@@ -188,15 +194,12 @@ export function main() {
           </div>
           <a href="#"><h1 id="toggleEditor"><i class="arrown down"></i>Editor</h1></a>
           <div id='divEditor'>
-            <textarea id="code" readonly="true"></textarea>
+            <div id='filesTree'><ul/></div>
+            <textarea id="code"></textarea>
             <input type="button" value="Save and run (Ctrl+S)"></input>
           </div>
           <a href="#"><h1 id="toggleSteps"><i class="arrown down"></i>Steps</h1></a>
-          <div id='divSteps'>
-            <div id='stepstree'>
-              <ul style='float: left; margin-right: 20px;' id='steps'/>
-            </div>
-          </div>
+          <div id='divSteps'></div>
           <a href="#"><h1 id="toggleStepCode"><i class="arrown right"></i>Step Code</h1></a>
           <div id='divStepCode' class='hidden'>
             <div id='stepCode'></div>
@@ -256,7 +259,25 @@ export function main() {
     $("#username").html(data);
   });
 
-  getApp();
+  getApp('index.js');
+
+  $("#filesTree").fancytree({
+    activate: function(event, data) {
+      const fname = data.node.title;
+      getApp(fname);
+    }
+  });
+  const ftree = $("#filesTree").fancytree("getTree");
+  $.get("/listfiles", function(data) {
+    const fnames = JSON.parse(data);
+    fnames.sort();
+    for (let i = 0; i < fnames.length; i++) {
+      ftree.rootNode.addChildren({
+        title: fnames[i],
+        active: fnames[i] === 'index.js'
+      });
+    }
+  });
 
   const doResize = function() {
     const m = $("#mainContent");
@@ -283,3 +304,4 @@ export function main() {
   $("#mainContent").on("DOMSubtreeModified", throttle(1000, doResize));
   setTimeout(doResize, 0);
 };
+
