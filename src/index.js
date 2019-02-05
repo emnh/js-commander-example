@@ -60,13 +60,40 @@ function drawSplit(canvas, ctx, color1, color2) {
 function addTick(state) {
   var counter = performance.now() / 1000.0;
   var tick = 0.0;
+  const historyLength = 60;
+  const history = [];
+  for (let i = 0; i < historyLength; i++) {
+    history.push(0);
+  }
+  const ret = {
+    tick: tick,
+    movingSum: 0,
+    index: 0,
+    sampleCount: 0,
+    average: 0,
+    history: history,
+    fps: 0,
+    maxfps: 0
+  };
   const f = (update) => {
     const nextCounter = performance.now() / 1000.0;
     tick = update ? nextCounter - counter : tick;
     counter = update ? nextCounter : counter;
-    return tick;
+    ret.history[ret.index] = update ? tick : ret.history[ret.index];
+    ret.sampleCount = Math.min(historyLength, update ? ret.sampleCount + 1 : ret.sampleCount);
+    const sub =
+          ret.sampleCount >= historyLength ? 
+          	ret.history[(ret.index + historyLength - 1) % historyLength] : 0;
+    ret.movingSum += (update ? tick - sub : 0);
+    ret.average = ret.movingSum / ret.sampleCount;
+    ret.fps = 1.0 / ret.average;
+    ret.maxfps = Math.max(ret.fps, ret.maxfps);
+    ret.index = update ? (ret.index + 1) % historyLength : ret.index;
+    ret.tick = tick;
+    //console.log(ret.average);
+    return ret;
   };
-  return produce(state, s => {
+  return state.produce(state, s => {
   	s.tick = f;
   });
 }
@@ -79,7 +106,7 @@ function updateTick(state) {
 function addAndUpdateTick(funtree) {
   funtree.addTick = [addTick];
   funtree.prepare.push('addTick');
-  funtree.draw.unshift(updateTick);
+  funtree.anim.unshift(updateTick);
 }
 
 function addCounter(state, name) {
@@ -89,7 +116,7 @@ function addCounter(state, name) {
     counter = update ? counter + 1 : counter;
     return oldCounter;
   };
-  return produce(state, s => {
+  return state.produce(state, s => {
   	s[name] = f;
   });
 }
@@ -108,7 +135,7 @@ function addAndUpdateCounter(funtree, name) {
     }
   ];
   funtree.prepare.push(name);
-  funtree.draw.unshift(
+  funtree.anim.unshift(
     {
       call: updateCounter,
       args: state => ([state, name]),
@@ -116,83 +143,93 @@ function addAndUpdateCounter(funtree, name) {
     });
 }
 
-function drawMS(state, canvas, ctx, color1, color2) {
+function drawFPS(state, canvas, ctx, color1, color2) {
   const mid = canvas.height / 2;
   const time = new Date().getTime() / 1000.0;
   //const split = Math.floor(mid + mid * Math.sin(time) / 2);
   const w = state.frameCounter() % canvas.width;
-  const split = Math.floor(state.tick() * 30.0 * canvas.height);
-  ctx.clearRect(w, 0, 50, canvas.height);
+  const tick = state.tick();
+  const split = Math.floor((tick.fps / tick.maxfps) * 0.5 * canvas.height);
+  ctx.font = "30px Arial";
+  ctx.clearRect(0, 0, 150, 100);
+  ctx.fillText(Math.floor(tick.fps).toString() + ' FPS', 10, 50);
+  ctx.clearRect(w + 1, 0, 1, canvas.height);
+  ctx.fillStyle = 'blue';
+  ctx.fillRect(w + 1, 0, 1, canvas.height);
   ctx.fillStyle = color1;
   ctx.fillRect(w, 0, 1, split);
   ctx.fillStyle = color2;
   ctx.fillRect(w, split, 1, canvas.height - split);
 }
 
-const immer = require("immer");
-const produce = immer.produce;
+(function() {
+  const immer = require("immer");
+  const produce = immer.produce;
 
-const steps = [];
+  const steps = [];
 
-steps.push({
-  state: {},
-  funtree: {
-    getLibs: [getLibs],
-    resetTarget: [resetTarget],
-    addCanvas: [addCanvas],
-    resizeCanvas: [resizeCanvas],
-    get2DContext: [get2DContext],
-    draw: [
-      { 
-       call: drawSplit,
-       args: state => ([state.canvas, state.ctx, "orange", "black"]),
-       ret: (state, x) => state
-      }
-    ],
-    prepare: [
-      'getLibs',
-      'resetTarget',
-      'addCanvas',
-      'resizeCanvas',
-      'get2DContext',
-    ],
-    main: [
-      'prepare',
-      'draw'
-    ],
-    anim: ['draw']
-  }
-});
-
-steps.push(produce(steps[steps.length - 1], s => {
-  s.parent = steps[steps.length - 1];
-  s.funtree.draw = [
-    { 
-       call: drawSplit,
-       args: state => ([state.canvas, state.ctx, "red", "green"]),
-       ret: (state, x) => state
-      }
-  ];
-}, function(patches, inversePatches) {
-  //console.log("patches", patches);
-}));
-
-steps.push(produce(steps[steps.length - 1], s => {
-  s.parent = steps[steps.length - 1];
-  s.funtree.draw = [
-    {
-      call: drawMS,
-      args: state => ([state, state.canvas, state.ctx, "red", "green"]),
-      ret: (state, x) => state
+  steps.push({
+    title: 'Draw Orange + Black',
+    state: {},
+    funtree: {
+      getLibs: [getLibs],
+      resetTarget: [resetTarget],
+      addCanvas: [addCanvas],
+      resizeCanvas: [resizeCanvas],
+      get2DContext: [get2DContext],
+      anim: [
+        { 
+         call: drawSplit,
+         args: state => ([state.canvas, state.ctx, "orange", "black"]),
+         ret: (state, x) => state
+        }
+      ],
+      prepare: [
+        'getLibs',
+        'resetTarget',
+        'addCanvas',
+        'resizeCanvas',
+        'get2DContext',
+      ],
+      main: [
+        'prepare',
+        'anim'
+      ],
     }
-  ];
-  addAndUpdateTick(s.funtree);
-  s.funtree.addStartTime = [addStartTime];
-  addAndUpdateCounter(s.funtree, 'frameCounter');
-  s.funtree.prepare.push('addStartTime');
-}, function(patches, inversePatches) {
-  //console.log("patches", patches);
-}));
+  });
 
-const tutorial = require('./tutorial.js');
-tutorial.setupTutorial(steps);
+  steps.push(produce(steps[steps.length - 1], s => {
+    s.title = 'Draw Red + Green';
+    s.parent = steps[steps.length - 1];
+    s.funtree.anim = [
+      { 
+         call: drawSplit,
+         args: state => ([state.canvas, state.ctx, "red", "green"]),
+         ret: (state, x) => state
+        }
+    ];
+  }, function(patches, inversePatches) {
+    //console.log("patches", patches);
+  }));
+
+  steps.push(produce(steps[steps.length - 1], s => {
+    s.title = 'Draw FPS';
+    s.parent = steps[steps.length - 1];
+    s.funtree.anim = [
+      {
+        call: drawFPS,
+        args: state => ([state, state.canvas, state.ctx, "red", "green"]),
+        ret: (state, x) => state
+      }
+    ];
+    addAndUpdateTick(s.funtree);
+    addAndUpdateCounter(s.funtree, 'frameCounter');
+    s.funtree.addStartTime = [addStartTime];
+    s.funtree.prepare.push('addStartTime');
+  }, function(patches, inversePatches) {
+    //console.log("patches", patches);
+  }));
+
+  const tutorial = require('./tutorial.js');
+  tutorial.setupTutorial(steps);
+})();
