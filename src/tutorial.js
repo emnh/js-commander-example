@@ -250,49 +250,6 @@ function loadStep(animationFrameFuns, steps, id, i) {
 }
 
 export function setupTutorial(steps) {
-  $("head").append(`
-<style>
-.hidden {
-	display: none;
-}
-pre code {
-	font: normal 10pt Consolas, Monaco, monospace;
-}
-.diff-addition {
-	background: darkgreen;
-}
-.diff-deletion {
-	background: darkred;
-}
-#stepstree {
-  /* border: 1px solid black; */
-  margin-bottom: 20px;
-}
-#leftside {
-  float: left;
-  height: 95vh;
-  width: 49vw;
-  overflow: scroll;
-}
-#stepContent {
-  border: 1px solid black;
-  float: left;
-  width: 49vw;
-  height: 95vh;
-  position: relative;
-}
-</style>
-`);
-  $("body").append(`
-    <div id='leftside'>
-      <h1>Steps</h1>
-      <div id='stepstree'>
-        <ul style='float: left; margin-right: 20px;' id='steps'/>
-      </div>
-      <div id='stepCode'></div>
-    </div>
-    <div id='stepContent'></div>
-  `);
   const animationFrameFuns = [];
 
   function update() {
@@ -306,6 +263,7 @@ pre code {
 
   const seen = {};
   let i = 0;
+  let lastNum = '';
   for (let k = 0; k < steps.length; k++) {
     const prefix = steps[k].title[0];
     const isNewPrefix = seen[prefix] === undefined;
@@ -321,9 +279,12 @@ pre code {
       i++;
     }
     seen[prefix] = true;
+    const stepNum = j + '.' + (i + 1);
+    const selected = k + 1 == steps.length ? ' active' : '';
+    lastNum = stepNum;
     $("#prefix" + j).append(
-      "<li class='folder' id='step" + j + '.' + (i + 1) + '.' + k + "'>" +
-      j + '.' + (i + 1) + ': ' + steps[k].title[steps[k].title.length - 1] +
+      "<li class='folder" + selected + "' id='step" + j + '.' + (i + 1) + '.' + k + "'>" +
+      stepNum + ': ' + steps[k].title[steps[k].title.length - 1] +
       "</li>");
   }
   $("#stepstree").fancytree({
@@ -336,5 +297,5 @@ pre code {
         }
       },
     });
-  loadStep(animationFrameFuns, steps, '1.1', 0)();
+  loadStep(animationFrameFuns, steps, lastNum, steps.length - 1)();
 }
