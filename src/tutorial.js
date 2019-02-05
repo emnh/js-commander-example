@@ -22,8 +22,8 @@ export function evaluateCall(state, fn) {
 
 export function evaluate(step, fname, state, callback, noeval, mainBody) {
   const fns = step.funtree[fname];
-  let newState = state === undefined ? step.state : state;
   const toplevel = mainBody === undefined;
+  let newState = state === undefined ? step.state : state;
   if (toplevel) {
     mainBody = [
       'function ' + fname + '(state) {',
@@ -38,8 +38,8 @@ export function evaluate(step, fname, state, callback, noeval, mainBody) {
     if (typeof fn === 'string') {
       newState = evaluate(step, fn, newState, callback, noeval, mainBody);
     } else if (fn.hasOwnProperty('call')) {
-      const efn = function(state) {
-        return evaluateCall(state, fn);
+      const efn = function(s) {
+        return evaluateCall(s, fn);
       };
       if (noeval === undefined) {
         newState = efn(newState);
@@ -71,7 +71,7 @@ export function evaluate(step, fname, state, callback, noeval, mainBody) {
       throw new Error("no state returned");
     }
   }
-  if (toplevel) {
+  if (toplevel && fname === 'main') {
     mainBody.push('}');
     callback({
       oldState: state,
@@ -197,10 +197,14 @@ function loadStep(animationFrameFuns, steps, i) {
     }
     const mainState = evaluate(step, 'main', undefined, callback);
 
+    let animState = mainState;
     const flattened = [];
     evaluate(step, 'anim', undefined, function(data) {
       flattened.push(function() {
-        data.fnRaw(mainState);
+        animState = data.fnRaw(animState);
+        if (animState === undefined) {
+          throw new Error('undefined state returned');
+        }
       });
     }, true);
 
@@ -318,7 +322,6 @@ pre code {
   $("#stepstree").fancytree({
       activate: function(event, data) {
         const i = parseInt(data.node.key.match(/step([0-9]+)/)[1]);
-        console.log(data.node, i);
         loadStep(animationFrameFuns, steps, i)();
       },
     });
