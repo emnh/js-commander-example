@@ -36,8 +36,22 @@ function resizeCanvas(state) {
 
 function get2DContext(state) {
   const ctx = state.canvas.getContext("2d");
-  return state.produce(state, draftState => {
-    draftState.ctx = ctx;
+  return state.produce(state, s => {
+    s.ctx = ctx;
+  });
+}
+
+function getGLContext(state) {
+  const gl = state.canvas.getContext("webgl");
+  
+  // Only continue if WebGL is available and working
+  if (gl === null) {
+    alert("Unable to initialize WebGL. Your browser or machine may not support it.");
+    throw new Error('no WebGL');
+  }
+  
+  return state.produce(state, s => {
+    s.gl = gl;
   });
 }
 
@@ -166,7 +180,7 @@ function serializeConfig(state) {
       }));
 }
 
-function getColorConfig(state, name, value) {
+function addColorConfig(state, name, value) {
   state.$("#config")
     .append("<input id='" + name + "' type='color' style='display: block;'/>")
   	.find("#" + name)
@@ -179,6 +193,28 @@ function getColorConfig(state, name, value) {
   return state;
 }
 
+function hexToRgb(hex) {
+  var result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  return result ? {
+    r: parseInt(result[1], 16) / 255.0,
+    g: parseInt(result[2], 16) / 255.0,
+    b: parseInt(result[3], 16) / 255.0
+  } : null;
+}
+
+function clearCanvas(state) {
+  const gl = state.gl;
+  
+  // Set clear color
+  const rgb = hexToRgb(state.config('color1'));
+  gl.clearColor(rgb.r, rgb.g, rgb.b, 1.0);
+  
+  // Clear the color buffer with specified clear color
+  gl.clear(gl.COLOR_BUFFER_BIT);
+  
+  return state;
+}
+
 (function() {
   const immer = require("immer");
   const produce = immer.produce;
@@ -186,14 +222,14 @@ function getColorConfig(state, name, value) {
   const steps = [];
 
   steps.push({
-    title: 'Draw Orange + Black',
+    title: ['2D', 'Draw Orange + Black'],
     state: {},
     funtree: {
       getLibs: [getLibs],
       resetTarget: [resetTarget],
       addCanvas: [addCanvas],
       resizeCanvas: [resizeCanvas],
-      get2DContext: [get2DContext],
+      getContext: [get2DContext],
       anim: [
         { 
          call: drawSplit,
@@ -206,7 +242,7 @@ function getColorConfig(state, name, value) {
         'resetTarget',
         'addCanvas',
         'resizeCanvas',
-        'get2DContext',
+        'getContext',
       ],
       main: [
         'prepare',
@@ -216,7 +252,7 @@ function getColorConfig(state, name, value) {
   });
 
   steps.push(produce(steps[steps.length - 1], s => {
-    s.title = 'Draw Red + Green';
+    s.title = ['2D', 'Draw Red + Green'];
     s.parent = steps[steps.length - 1];
     s.funtree.anim = [
       { 
@@ -230,7 +266,7 @@ function getColorConfig(state, name, value) {
   }));
 
   steps.push(produce(steps[steps.length - 1], s => {
-    s.title = 'Draw FPS';
+    s.title = ['2D', 'Draw FPS'];
     s.parent = steps[steps.length - 1];
     s.funtree.anim = ['preAnim', 'mainAnim'];
     s.funtree.preAnim = [];
@@ -247,10 +283,10 @@ function getColorConfig(state, name, value) {
   }));
   
   steps.push(produce(steps[steps.length - 1], s => {
-    s.title = 'Configure Color';
+    s.title = ['2D', 'Configure Color'];
     s.parent = steps[steps.length - 1];
+    s.funtree.preAnim.push(serializeConfig);
     s.funtree.mainAnim = [
-      serializeConfig,
       {
         call: drawFPS,
         args: s => ([s, s.canvas, s.ctx, s.config('color1'), s.config('color2')]),
@@ -259,21 +295,31 @@ function getColorConfig(state, name, value) {
     ];
     s.funtree.addConfig = [addConfig];
     s.funtree.prepare.push('addConfig');
-    s.funtree.getColorConfig = [
+    s.funtree.addColorConfig = [
       {
-        call: getColorConfig,
+        call: addColorConfig,
         args: s => ([s, 'color1', '#ff0000']),
         ret: (s, x) => x
       },
       {
-        call: getColorConfig,
+        call: addColorConfig,
         args: s => ([s, 'color2', '#000000']),
         ret: (s, x) => x
       }
     ];
-    s.funtree.prepare.push('getColorConfig');
+    s.funtree.prepare.push('addColorConfig');
   }, function(patches, inversePatches) {
     //console.log("patches", patches);
+  }));
+  
+  // START OF 3D
+  
+  steps.push(produce(steps[steps.length - 1], s => {
+    s.title = ['3D', 'Clear Canvas'];
+    s.parent = steps[steps.length - 1];
+    s.funtree.getContext = [getGLContext];
+    s.funtree.clearCanvas = [clearCanvas];
+    s.funtree.mainAnim = ['clearCanvas'];
   }));
 
   const tutorial = require('./tutorial.js');
