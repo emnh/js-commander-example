@@ -18,8 +18,10 @@
   },
   "homepage": "https://github.com/emnh/js-commander-example#readme",
   "dependencies": {
+    "c3": "^0.6.12",
     "clean-webpack-plugin": "^1.0.1",
     "codemirror": "^5.43.0",
+    "d3": "^5.8.2",
     "diff": "^4.0.1",
     "escodegen": "^1.11.0",
     "esprima": "^4.0.1",
