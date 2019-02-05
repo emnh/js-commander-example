@@ -19,6 +19,7 @@
   "homepage": "https://github.com/emnh/js-commander-example#readme",
   "dependencies": {
     "diff": "^4.0.1",
+    "gl-matrix": "^3.0.0",
     "highlight.js": "^9.14.2",
     "highlighter": "^0.1.0",
     "immer": "^2.0.0",
