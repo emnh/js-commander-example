@@ -220,7 +220,7 @@ function main() {
   const immer = require("immer");
   const produce = immer.produce;
   
-  const funtree = expandMacro(macros.functionTree, function() {
+  const funtree = expandMacro(window.App.macros.functionTree, function() {
 // This function is auto-generated on save
 return {
 addAndUpdateTick: [addAndUpdateTick],
@@ -375,14 +375,15 @@ if (module.hot) {
   module.hot.decline('./editor.js');
 }
 
-if (window.loaded === undefined) {
+if (window.App === undefined) {
   require('jquery')(function() {
     editor.main();
 	main();
   });
-  window.loaded = true;
+  window.App = {};
 } else {
   require('jquery')(function() {
     main();
   });
 }
+window.App.macros = macros;
