@@ -27,13 +27,6 @@ export function functionTree(code, parsed) {
   return 'return ' + newCode + ';';
 }
 
-export function getAddValueTrack(main) {
-  return function(code, parsed) {
-  	const list = getFunctionList(parsed);
-  	return valuetrack.addValueTrack(code, parsed, list, main);
-  };
-}
-
 export function expandMacro(f, result) {
   // When file is saved and parsed successfully,
   // expandMacro(f, function() { })
