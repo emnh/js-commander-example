@@ -16,6 +16,14 @@ require('codemirror/mode/mllike/mllike');
 require('codemirror/addon/lint/lint');
 require('codemirror/addon/lint/javascript-lint');
 
+// Search/replace
+
+require('codemirror/addon/search/search');
+require('codemirror/addon/search/searchcursor');
+require('codemirror/addon/search/jump-to-line');
+require('codemirror/addon/dialog/dialog');
+require('codemirror/addon/dialog/dialog.css');
+
 const fancytree = require('jquery.fancytree');
 require('jquery.fancytree/dist/modules/jquery.fancytree.edit');
 require('jquery.fancytree/dist/modules/jquery.fancytree.filter');
@@ -132,12 +140,16 @@ function save() {
           completed++;
           if (completed === total) {
             console.log("all functions saved");
-            getFunctions();
+            setTimeout(getFunctions, 1000);
           }
         });
       }
     }
     completed++;
+    if (completed === total) {
+      console.log("all functions saved");
+      setTimeout(getFunctions, 1000);
+    }
 
     $.post("./postapp", {
       fname: fname,
