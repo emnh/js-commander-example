@@ -63,9 +63,13 @@ function getApp(fname, funName) {
     state.cm.getDoc().setValue(data);
     if (funName !== undefined) {
       try {
+        const code = data;
         const parsed = esprima.parseModule(code, { range: true, loc: true });
         for (let i = 0; i < parsed.body.length; i++) {
-          const decl = parsed.body[i];
+          let decl = parsed.body[i];
+          if (decl.type === 'ExportNamedDeclaration')  {
+            decl = decl.declaration;
+          }
           if (decl.type === 'FunctionDeclaration' && decl.id.name === funName)  {
             const line = decl.loc.start.line;
             jumpToLine(line);
@@ -102,14 +106,17 @@ function save() {
 
   try {
     const parsed = esprima.parseModule(code, { range: true, loc: true });
-    console.log(parsed);
 
     const fname = state.fname;
 
     let total = 1;
     let completed = 0;
     for (let i = 0; i < parsed.body.length; i++) {
-      const decl = parsed.body[i];
+      let decl = parsed.body[i];
+      console.log(decl);
+      if (decl.type === 'ExportNamedDeclaration')  {
+        decl = decl.declaration;
+      }
       if (decl.type === 'FunctionDeclaration')  {
         total++;
         const a = decl.range[0];
