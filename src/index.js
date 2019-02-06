@@ -1,5 +1,3 @@
-/* jshint esversion: 6 */
-
 /*
   TODO:
   - Automatic function hook-up resolution based on matching inputs / outputs.
