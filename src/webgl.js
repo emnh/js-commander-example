@@ -1,3 +1,5 @@
+/* jshint esversion: 6 */
+
 const glm = require('gl-matrix');
 const mat4 = glm.mat4;
 
