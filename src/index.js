@@ -373,9 +373,7 @@ updateTick: [updateTick]
 }
 
 function update(funGraph) {
-  if (window.App.funGraph !== undefined) {
-    funGraph = valuetrack.applyUpdate(window.App.funGraph, funGraph());
-  }
+  funGraph = valuetrack.applyUpdate(window.App.funGraph, funGraph());
   
   /*funGraph.sum = function(_state, a, b) {
     return _state.liftFunction((a, b) => a + b)(a, b);

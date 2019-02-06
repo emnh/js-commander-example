@@ -6,7 +6,7 @@ const expandMacro = macros.expandMacro;
 /* List of syntax nodes from
 * https://github.com/jquery/esprima/blob/master/src/syntax.ts .*/
 
-export const Syntax = {
+export const SyntaxRewrite = {
     AssignmentExpression: 'AssignmentExpression',
     AssignmentPattern: 'AssignmentPattern',
     ArrayExpression: 'ArrayExpression',
@@ -115,10 +115,18 @@ const liftValue = function(val, lastUpdate, name) {
   };
 };
 
-const liftFunction = function(f) {
+const unliftValue = function(obj) {
+  return obj.value;
+};
+
+const liftFunction = function(numArgs, f) {
   // skipAddValueTrack
   return function() {
-    const args = Array.prototype.slice.call(arguments);
+    const args = 
+          numArgs === null ?
+          	Array.prototype.slice.call(arguments) :
+          	Array.prototype.slice.call(arguments, 0, numArgs);
+   	//console.log("args", args);
     return {
       lastUpdate: args.reduce((a, b) => Math.max(a.lastUpdate, b.lastUpdate)),
       deps: args.reduce((a, b) => new Set([...a.deps, ...b.deps])),
@@ -138,7 +146,17 @@ export function addValueTrack(code, parsed) {
   let idCounter = 0;
 
   const pp = (code, parentNode, x) => {
-    if (x.type === 'FunctionDeclaration') {
+    
+    if (typeof SyntaxRewrite[x.type] !== 'string') {
+      return SyntaxRewrite[x.type](x);
+    }
+    
+    if (x.type === 'ForStatement') {
+      const t = expr('_state.unliftValue(x)');
+      t.arguments[0] = x.test;
+      x.test = t;
+      return x;
+  	} else if (x.type === 'FunctionDeclaration') {
       // Add _state as first parameter
       x.params.unshift(expr('_state'));
       return x;
@@ -151,23 +169,40 @@ export function addValueTrack(code, parsed) {
         x.callee = expr('_state.' + x.callee.name);
       }
       return x;
+    } else if (x.type === 'AssignmentExpression') {
+      const op = x.operator[0];
+      const t3 =
+      	expr('_state.liftFunction(2, (a, b) => a ' + op + ' b)(A, B)');
+      t3.arguments[0] = x.left;
+      t3.arguments[1] = x.right;
+      const t4 = expr('a = b');
+      t4.left = x.left;
+      t4.right = t3;
+      return t4;
+    } else if (x.type === 'UpdateExpression') {
+      const op = x.operator;
+      const t3 =
+        x.prefix ?
+        	expr('_state.liftFunction(1, a => a)(A, ' + op + 'A.value)') :
+      		expr('_state.liftFunction(1, a => a)(A, A.value' + op + ')');
+      t3.arguments[0] = x.argument;
+      t3.arguments[1].argument.object = x.argument;
+      return t3;
   	} else if (x.type === 'BinaryExpression') {
       const op = x.operator;
       const t3 =
-      	expr('_state.liftFunction((a, b) => a ' + op + ' b)(A, B)');
+      	expr('_state.liftFunction(2, (a, b) => a ' + op + ' b)(A, B)');
       t3.arguments[0] = x.left;
       t3.arguments[1] = x.right;
       return t3;
     } else if (x.type === 'Literal') {
-      const lastUpdate = Math.round(new Date().getTime());
       const funName = 'getLiteral' + idCounter;
       const t2 =
         esprima.parse(
           'const ' + funName +
           ' = function(_state) {\n' +
-          'return _state.liftValue(a, ' + lastUpdate + ', ' + idCounter + ')' +
+          'return _state.liftValue(a, _state.getLiteral' + idCounter + '.lastUpdate, ' + idCounter + ')' +
           '};\n');
-      //console.log(t2);
       const t3 = t2.body[0].declarations[0].init.body.body[0].argument;
       t3.arguments[0] = x;
       const newBody = escodegen.generate(t2);
@@ -177,7 +212,7 @@ export function addValueTrack(code, parsed) {
       });
       idCounter++;
       
-      return expr(funName + '(_state)');
+      return expr('_state.' + funName + '(_state)');
     } else {
       return x;
     }
@@ -221,6 +256,10 @@ export function addValueTrack(code, parsed) {
     body: 'const liftValue = ' + liftValue.toString() + ';\n\n'
   });
   list.push({
+    funName: 'unliftValue',
+    body: 'const unliftValue = ' + unliftValue.toString() + ';\n\n'
+  });
+  list.push({
     funName: 'liftFunction',
     body: 'const liftFunction = ' + liftFunction.toString() + ';\n\n'
   });
@@ -236,11 +275,35 @@ export function addValueTrack(code, parsed) {
   //return '// ' + main + '\nreturn 0;';
 }
 
+function getStamp() {
+  return Math.round(new Date().getTime() / 1000.0);
+}
+
 export function applyUpdate(funGraphA, funGraphB) {
+  if (funGraphA !== undefined) {
+    const funGraphC = {};
+    for (let key in funGraphB) {
+      funGraphB[key].lastUpdate = getStamp();
+      // Compare function bodies, update if necessary
+      if (funGraphA[key] !== undefined) {
+      	//console.log("body", key, funGraphA[key].toString(), funGraphB[key].toString());
+      }
+      if (funGraphA[key] !== undefined &&
+          funGraphA[key].toString() === funGraphB[key].toString()) {
+      	funGraphC[key] = funGraphA[key];
+      } else {
+        funGraphC[key] = funGraphB[key];
+      }
+    }
+    return funGraphC;
+  }
+  for (let key in funGraphB) {
+    funGraphB[key].lastUpdate = getStamp();
+  }
   return funGraphB;
 }
 
-//console.log(esprima.parse('const fun = 0;'));
+//console.log(esprima.parse('fun += 2;'));
 
 export function funGraph() {
   function sum(a, b) {
@@ -248,7 +311,13 @@ export function funGraph() {
   }
 
   function calc() {
-    return sum(1, 2);
+    let s = 0;
+    
+    for (let i = 0; i < 10; i++) {
+      s += sum(1, i);
+    }
+    
+    return s;
   }
 
   function main() {
