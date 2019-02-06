@@ -37,10 +37,24 @@ function rebind(key, f, opts) {
   }
 }
 
-function getApp(fname) {
-  $.get("/app", { fname: fname }, function(data) {
-    state.cm.getDoc().setValue(data);
-    /*
+/*
+function extraCode() {
+  const code = state.cm.getDoc().getValue();
+  if (code.indexOf(jshint) < 0) {
+    state.cm.getDoc().setValue(jshint + '\n' + code);
+  }
+}
+*/
+
+function jumpToLine(i) { 
+  const editor = state.cm;
+  var t = editor.charCoords({line: i, ch: 0}, "local").top; 
+  var middleHeight = editor.getScrollerElement().offsetHeight / 2; 
+  editor.scrollTo(null, t - middleHeight - 5); 
+}
+
+function getFun(funName) {
+  $.get("/fun", { funName: funName }, function(data) {
     const dp = JSON.parse(data);
     if (
       dp !== undefined &&
@@ -49,7 +63,47 @@ function getApp(fname) {
       const code = dp[0].app;
       state.cm.getDoc().setValue(code);
     }
-    */
+  });
+}
+
+function getApp(fname, funName) {
+  $.get("/app", { fname: fname }, function(data) {
+    state.fname = fname;
+    state.cm.getDoc().setValue(data);
+    if (funName !== undefined) {
+      try {
+        const parsed = esprima.parseModule(code, { range: true, loc: true });
+        for (let i = 0; i < parsed.body.length; i++) {
+          const decl = parsed.body[i];
+          if (decl.type === 'FunctionDeclaration' && decl.id.name === funName)  {
+            const line = decl.loc.start.line;
+            jumpToLine(line);
+            return;
+          }
+        }
+      } catch(err) {
+        console.log("failed to jump to function");
+      }
+    }
+  });
+}
+
+function getFunctions() {
+  $.get("/functions", function(data) {
+    const dp = JSON.parse(data);
+    const ftree = $("#filesTree").fancytree("getTree");
+    const functions = ftree.rootNode.findFirst('Functions');
+    //functions.removeChildren();
+    for (let i = 0; i < dp.length; i++) {
+      const funName = dp[i].funName;
+      if (functions.findFirst((x) => x.title === funName) === null) {
+        functions.addChildren({
+          title: funName
+        });
+      }
+    }
+    functions.sortChildren(null, true);
+    functions.setExpanded(true);
   });
 }
 
@@ -57,10 +111,35 @@ function save() {
   const code = state.cm.getDoc().getValue();
 
   try {
-    const parsed = esprima.parse(code);
+    const parsed = esprima.parseModule(code, { range: true, loc: true });
     console.log(parsed);
 
-    const fname = $("filesTree").fancytree("getTree").getActiveNode().title;
+    const fname = state.fname;
+
+    let total = 1;
+    let completed = 0;
+    for (let i = 0; i < parsed.body.length; i++) {
+      const decl = parsed.body[i];
+      if (decl.type === 'FunctionDeclaration')  {
+        total++;
+        const a = decl.range[0];
+        const b = decl.range[1];
+        const funName = decl.id.name;
+        const body = code.slice(a, b);
+        // console.log(funName, body);
+        $.post("./postfun", {
+          funName: funName,
+          value: body
+        }, function(data) {
+          completed++;
+          if (completed === total) {
+            console.log("all functions saved");
+            getFunctions();
+          }
+        });
+      }
+    }
+    completed++;
 
     $.post("./postapp", {
       fname: fname,
@@ -70,6 +149,7 @@ function save() {
 
     console.log("save");
   } catch (e) {
+    console.log(e);
     alert("JavaScript parsing failed!");
   }
 }
@@ -229,6 +309,7 @@ export function main() {
     gutters: ["CodeMirror-lint-markers"],
     lint: true
   });
+  state.cm.setOption('lint', { options: { esversion: 6 }});
 
   const hotKeys = {
     'Ctrl-S': save
@@ -263,8 +344,14 @@ export function main() {
 
   $("#filesTree").fancytree({
     activate: function(event, data) {
-      const fname = data.node.title;
-      getApp(fname);
+      if (data.node.parent.title !== null) {
+        const fname = data.node.parent.title !== null ? data.node.parent.title : data.node.title;
+        getApp(fname);
+      } else {
+        const fname = data.node.parent.title;
+        const funName = data.node.title;
+        getApp(fname, funName);
+      }
     }
   });
   const ftree = $("#filesTree").fancytree("getTree");
@@ -277,6 +364,12 @@ export function main() {
         active: fnames[i] === 'index.js'
       });
     }
+    const functions = ftree.rootNode.addChildren({
+      title: 'Functions',
+      folder: true,
+      expanded: true,
+    });
+    getFunctions();
   });
 
   const doResize = function() {
@@ -297,7 +390,6 @@ export function main() {
       $("#output").height(h);
       $("#output").width(w);
     }
-    //console.log("resize");
   };
   doResize();
   $(window).resize(doResize);
