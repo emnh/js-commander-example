@@ -1,4 +1,16 @@
-/*jshint esversion: 6 */
+/* jshint esversion: 6 */
+
+/*
+  TODO:
+  - Automatic function hook-up resolution based on matching inputs / outputs.
+  - Function registry for indirection and hot reload without server / webpack.
+  - GLSL handling.
+  - Replace window references with a ./hot.js module for hot reload related features.
+  - Prefer regular functions, not "state" functions,
+    but find a way to automatically bind them to state.
+    Perhaps regular arguments and return a dictionary, then esprima map it?
+  - Error propagation.
+*/
 
 const webgl = require('./webgl.js');
 const editor = require('./editor.js');
