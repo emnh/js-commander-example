@@ -1,4 +1,6 @@
-export function functionTree(parsed) {
+const valuetrack = require('./valuetrack.js');
+
+export function getFunctionList(parsed) {
   const list = [];
   for (let i = 0; i < parsed.body.length; i++) {
       let decl = parsed.body[i];
@@ -12,12 +14,24 @@ export function functionTree(parsed) {
         list.push(funName);
       }
   }
+  return list;
+}
+
+export function functionTree(code, parsed) {
+  const list = getFunctionList(parsed);
   list.sort();
-  const code = 
+  const newCode = 
     '{\n' +
     list.map(x => x + ': [' + x + ']').join(',\n') +
     '\n}';
-  return 'return ' + code + ';';
+  return 'return ' + newCode + ';';
+}
+
+export function getAddValueTrack(main) {
+  return function(code, parsed) {
+  	const list = getFunctionList(parsed);
+  	return valuetrack.addValueTrack(code, parsed, list, main);
+  };
 }
 
 export function expandMacro(f, result) {
