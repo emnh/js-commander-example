@@ -6,7 +6,6 @@ import 'jquery.fancytree/dist/skin-lion/ui.fancytree.css';
 const $ = require('jquery');
 const d3 = require('d3');
 const c3 = require('c3');
-const macros = require('./macros.js');
 
 const jshint = require('jshint');
 window.JSHINT = jshint.JSHINT;
@@ -141,7 +140,7 @@ function expandMacros(parsed) {
           const before = code.substring(0, a);
           const toEval = code.substring(c, d);
           const fn = eval(toEval);
-          const result = fn(parsed);
+          const result = fn(code, parsed);
           const comment = "// This function is auto-generated on save\n";
           const middle = '{\n' + comment + result + '\n}';
           const after = code.substring(b);
@@ -481,5 +480,5 @@ export function main() {
   $(window).resize(doResize);
   $("#mainContent").on("DOMSubtreeModified", throttle(1000, doResize));
   setTimeout(doResize, 0);
-};
+}
 
