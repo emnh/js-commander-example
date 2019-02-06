@@ -37,15 +37,6 @@ function rebind(key, f, opts) {
   }
 }
 
-/*
-function extraCode() {
-  const code = state.cm.getDoc().getValue();
-  if (code.indexOf(jshint) < 0) {
-    state.cm.getDoc().setValue(jshint + '\n' + code);
-  }
-}
-*/
-
 function jumpToLine(i) { 
   const editor = state.cm;
   var t = editor.charCoords({line: i, ch: 0}, "local").top; 
@@ -92,18 +83,17 @@ function getFunctions() {
   $.get("/functions", function(data) {
     const dp = JSON.parse(data);
     const ftree = $("#filesTree").fancytree("getTree");
-    const functions = ftree.rootNode.findFirst('Functions');
-    //functions.removeChildren();
     for (let i = 0; i < dp.length; i++) {
+      const fileParent = ftree.rootNode.findFirst(x => x.title === dp[i].fname);
       const funName = dp[i].funName;
-      if (functions.findFirst((x) => x.title === funName) === null) {
-        functions.addChildren({
+      if (fileParent.findFirst((x) => x.title === funName) === null) {
+        fileParent.addChildren({
           title: funName
         });
+        fileParent.sortChildren(null, true);
+        //fileParent.setExpanded(true);
       }
     }
-    functions.sortChildren(null, true);
-    functions.setExpanded(true);
   });
 }
 
@@ -128,6 +118,7 @@ function save() {
         const body = code.slice(a, b);
         // console.log(funName, body);
         $.post("./postfun", {
+          fname: fname,
           funName: funName,
           value: body
         }, function(data) {
@@ -344,8 +335,9 @@ export function main() {
 
   $("#filesTree").fancytree({
     activate: function(event, data) {
-      if (data.node.parent.title !== null) {
-        const fname = data.node.parent.title !== null ? data.node.parent.title : data.node.title;
+      const ftree = $("#filesTree").fancytree("getTree");
+      if (data.node.parent === ftree.rootNode) {
+        const fname = data.node.title;
         getApp(fname);
       } else {
         const fname = data.node.parent.title;
@@ -364,11 +356,6 @@ export function main() {
         active: fnames[i] === 'index.js'
       });
     }
-    const functions = ftree.rootNode.addChildren({
-      title: 'Functions',
-      folder: true,
-      expanded: true,
-    });
     getFunctions();
   });
 
