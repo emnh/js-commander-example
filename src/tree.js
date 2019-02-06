@@ -305,5 +305,5 @@ export function addTree(container, renderColumns) {
       }, 100);
     }
   });
-};
+}
 
