@@ -123,5 +123,4 @@ function testValueTracking() {
   console.log(c, [...c.deps]);
 }
 
-
-testValueTracking();
+//testValueTracking();
