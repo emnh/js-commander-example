@@ -16,6 +16,8 @@ const tutorial = require('./tutorial.js');
 const macros = require('./macros.js');
 const memoize = require('./memoize.js');
 const expandMacro = macros.expandMacro;
+const valuetrack = require('./valuetrack.js');
+const esprima = require('esprima');
 
 function getLibs(state) {
   const $ = require('jquery');
@@ -216,7 +218,7 @@ function addColorConfig(state, name, value) {
   return state;
 }
 
-function main() {
+function mainSteps() {
   const immer = require("immer");
   const produce = immer.produce;
   
@@ -233,10 +235,13 @@ drawFPS: [drawFPS],
 drawSplit: [drawSplit],
 get2DContext: [get2DContext],
 getLibs: [getLibs],
+inject: [inject],
 main: [main],
+mainSteps: [mainSteps],
 resetTarget: [resetTarget],
 resizeCanvas: [resizeCanvas],
 serializeConfig: [serializeConfig],
+update: [update],
 updateTick: [updateTick]
 };
 });
@@ -367,23 +372,70 @@ updateTick: [updateTick]
   require('./test.js');
 }
 
-if (module.hot) {
-  module.hot.accept(function() {
-	console.log('Problem accepting updated self!');
-  });
-
-  module.hot.decline('./editor.js');
+function update(funGraph) {
+  if (window.App.funGraph !== undefined) {
+    funGraph = valuetrack.applyUpdate(window.App.funGraph, funGraph());
+  }
+  
+  /*funGraph.sum = function(_state, a, b) {
+    return _state.liftFunction((a, b) => a + b)(a, b);
+  };*/
+  window.App.funGraph = funGraph;
+  funGraph.main(funGraph);
 }
 
-if (window.App === undefined) {
-  require('jquery')(function() {
-    editor.main();
-	main();
-  });
-  window.App = {};
-} else {
-  require('jquery')(function() {
-    main();
-  });
+function inject(script) { 
+  const $ = require('jquery');
+  
+  if (window.App.injectCounter === undefined) {
+    window.App.injectCounter = 0;
+  }
+  
+  $('<script>')
+    .attr('type', 'text/javascript')
+    .text(script + '\n//@ sourceURL=injected' + window.App.injectCounter + '.js')
+    .appendTo('head');
+  
+  window.App.injectCounter++;
 }
-window.App.macros = macros;
+
+function main() {
+  if (module.hot) {
+    module.hot.accept(function(err) {
+      console.log('Problem accepting updated self!');
+      console.log(err);
+    });
+
+    module.hot.decline('./editor.js');
+  }
+
+  if (window.App === undefined) {
+    require('jquery')(function() {
+      editor.main();
+      mainSteps();
+    });
+    window.App = {};
+  } else {
+    require('jquery')(function() {
+      mainSteps();
+    });
+  }
+  window.App.macros = macros;
+  window.App.valuetrack = valuetrack;
+  window.App.update = update;
+
+  const body = valuetrack.funGraph.toString();
+  
+  const parsedContainer = esprima.parse(body, { range: true, loc: true });
+  
+  const parsed = parsedContainer.body[0].body;
+  
+  const script =
+        'window.App.update' +
+        valuetrack.addValueTrack(body, parsed);
+
+  inject(script);
+}
+
+main();
+//doTest().main();

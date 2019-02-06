@@ -1,9 +1,7 @@
+const macros = require('./macros.js');
 const esprima = require('esprima');
 const escodegen = require('escodegen');
-
-export function expandMacro(f, result) {
-  return result();
-}
+const expandMacro = macros.expandMacro;
 
 /* List of syntax nodes from
 * https://github.com/jquery/esprima/blob/master/src/syntax.ts .*/
@@ -129,58 +127,82 @@ const liftFunction = function(f) {
   };
 };
 
-export function addValueTrack(code, parsed, functionList, main) {
+function expr(code) {
+  return esprima.parse(code).body[0].expression;
+}
+
+export function addValueTrack(code, parsed) {
   const list = [];
+  const localFunctions = {};
   
   let idCounter = 0;
 
   const pp = (code, parentNode, x) => {
-    if (x.type === 'BinaryExpression') {
+    if (x.type === 'FunctionDeclaration') {
+      // Add _state as first parameter
+      x.params.unshift(expr('_state'));
+      return x;
+    } else if (x.type === 'CallExpression') {
+      if (localFunctions[x.callee.name] !== undefined) {
+        // Add _state as first argument
+        x.arguments.unshift(expr('_state'));
+        
+        // Replace function with _state.function
+        x.callee = expr('_state.' + x.callee.name);
+      }
+      return x;
+  	} else if (x.type === 'BinaryExpression') {
       const op = x.operator;
-      const t2 =
-      	esprima.parse('liftFunction((a, b) => a ' + op + ' b)(A, B)');
-      const t3 = t2.body[0].expression;
-      // console.log(x);
-      // console.log(t3);
+      const t3 =
+      	expr('_state.liftFunction((a, b) => a ' + op + ' b)(A, B)');
       t3.arguments[0] = x.left;
       t3.arguments[1] = x.right;
       return t3;
     } else if (x.type === 'Literal') {
-      const lastUpdate = Math.round(new Date().getTime() / 1000.0);
+      const lastUpdate = Math.round(new Date().getTime());
+      const funName = 'getLiteral' + idCounter;
       const t2 =
-        esprima.parse('liftValue(a, ' + lastUpdate + ', ' + idCounter + ')');
-      idCounter++;
-      const t3 = t2.body[0].expression;
-      // console.log(x);
-      // console.log(t3);
+        esprima.parse(
+          'const ' + funName +
+          ' = function(_state) {\n' +
+          'return _state.liftValue(a, ' + lastUpdate + ', ' + idCounter + ')' +
+          '};\n');
+      //console.log(t2);
+      const t3 = t2.body[0].declarations[0].init.body.body[0].argument;
       t3.arguments[0] = x;
-      return t3;
+      const newBody = escodegen.generate(t2);
+      list.push({
+        funName: funName,
+        body: newBody
+      });
+      idCounter++;
+      
+      return expr(funName + '(_state)');
     } else {
       return x;
     }
   };
-
+  
+  // Get local functions
   for (let i = 0; i < parsed.body.length; i++) {
       let decl = parsed.body[i];
       if (decl.type === 'ExportNamedDeclaration')  {
         decl = decl.declaration;
       }
       if (decl.type === 'FunctionDeclaration')  {
-        const a = decl.range[0];
-        const b = decl.range[1];
         const funName = decl.id.name;
-        if (code.slice(a, b).indexOf('expandMacro') >= 0 ||
-            code.slice(a, b).indexOf('skipAddValueTrack') >= 0) {
-          const comment = '// ' +
-            funName +
-            ' skipped because it contains expandMacro or skipAddValueTrack';
-          /*list.push({
-            funName: funName,
-            body: comment
-          });*/
-          console.log(comment);
-          continue;
-        }
+        localFunctions[funName] = true;
+      }
+  }
+
+  // Rewrite function graph
+  for (let i = 0; i < parsed.body.length; i++) {
+      let decl = parsed.body[i];
+      if (decl.type === 'ExportNamedDeclaration')  {
+        decl = decl.declaration;
+      }
+      if (decl.type === 'FunctionDeclaration')  {
+        const funName = decl.id.name;
         const template = esprima.parse('const ' + funName + ' = 0;');
 
         decl.id.name = 'REPLACE';
@@ -193,76 +215,43 @@ export function addValueTrack(code, parsed, functionList, main) {
         });
       }
   }
+  
+  list.push({
+    funName: 'liftValue',
+    body: 'const liftValue = ' + liftValue.toString() + ';\n\n'
+  });
+  list.push({
+    funName: 'liftFunction',
+    body: 'const liftFunction = ' + liftFunction.toString() + ';\n\n'
+  });
+  
   const ret =
-    'const liftValue = ' + liftValue.toString() + ';\n\n' +
-    'const liftFunction = ' + liftFunction.toString() + ';\n\n' +
+    '(function() {\n' +
   	(list.map(x => x.body)).join('\n\n') +
     '\n\nreturn {\n' +
     (list.map(x => '  ' + x.funName + ": " + x.funName)).join(', \n') +
-    '\n};\n\n';
-  console.log(ret);
+    '\n};\n\n' +
+    '});\n';
   return ret;
   //return '// ' + main + '\nreturn 0;';
 }
 
+export function applyUpdate(funGraphA, funGraphB) {
+  return funGraphB;
+}
+
 //console.log(esprima.parse('const fun = 0;'));
 
-function sum(a, b) {
-  return a + b;
-}
+export function funGraph() {
+  function sum(a, b) {
+    return a + b;
+  }
 
-function calc() {
-  return sum(1, 2);
-}
+  function calc() {
+    return sum(1, 2);
+  }
 
-function main() {
-  console.log(calc());
-}
-
-function doTest() {
-  return expandMacro(window.App && window.App.macros.getAddValueTrack(), function() {
-// This function is auto-generated on save
-const liftValue = function(val, lastUpdate, name) {
-  // skipAddValueTrack
-  return {
-    lastUpdate: lastUpdate,
-    deps: new Set([name]),
-    value: val
-  };
-};
-
-const liftFunction = function(f) {
-  // skipAddValueTrack
-  return function() {
-    const args = Array.prototype.slice.call(arguments);
-    return {
-      lastUpdate: args.reduce((a, b) => Math.max(a.lastUpdate, b.lastUpdate)),
-      deps: args.reduce((a, b) => new Set([...a.deps, ...b.deps])),
-      value: f.apply(this, args.map(x => x.value))
-    };
-  };
-};
-
-const sum = function(a, b) {
-    return liftFunction((a, b) => a + b)(a, b);
-};
-
-const calc = function() {
-    return sum(liftValue(1, 1549476372, 0), liftValue(2, 1549476372, 1));
-};
-
-const main = function() {
+  function main() {
     console.log(calc());
-};
-
-return {
-  sum: sum, 
-  calc: calc, 
-  main: main
-};
-
-
-});
+  }
 }
-
-doTest().main();
