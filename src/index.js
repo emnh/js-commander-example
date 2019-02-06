@@ -14,6 +14,7 @@ const webgl = require('./webgl.js');
 const editor = require('./editor.js');
 const tutorial = require('./tutorial.js');
 const macros = require('./macros.js');
+const memoize = require('./memoize.js');
 const expandMacro = macros.expandMacro;
 
 function getLibs(state) {
@@ -220,6 +221,7 @@ function main() {
   const produce = immer.produce;
   
   const funtree = expandMacro(macros.functionTree, function() {
+// This function is auto-generated on save
 return {
 addAndUpdateTick: [addAndUpdateTick],
 addCanvas: [addCanvas],
@@ -361,6 +363,8 @@ updateTick: [updateTick]
   tutorial.setupTutorial(steps);
   
   //console.log("main done");
+  
+  require('./test.js');
 }
 
 if (module.hot) {
