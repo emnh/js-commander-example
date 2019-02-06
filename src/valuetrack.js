@@ -6,17 +6,93 @@ const expandMacro = macros.expandMacro;
 /* List of syntax nodes from
 * https://github.com/jquery/esprima/blob/master/src/syntax.ts .*/
 
+const ForStatement = function(x) {
+  const t = expr('_state.unliftValue(x)');
+  t.arguments[0] = x.test;
+  x.test = t;
+  return x;
+};
+
+const FunctionDeclaration = function(x) {
+  // Add _state as first parameter
+  x.params.unshift(expr('_state'));
+  return x;
+};
+
+const CallExpression = function(x, list, localFunctions) {
+  if (localFunctions[x.callee.name] !== undefined) {
+    // Add _state as first argument
+    x.arguments.unshift(expr('_state'));
+
+    // Replace function with _state.function
+    x.callee = expr('_state.' + x.callee.name);
+  }
+  return x;
+};
+
+const AssignmentExpression = function(x) {
+  const op = x.operator[0];
+  const t3 =
+        expr('_state.liftFunction(2, (a, b) => a ' + op + ' b)(A, B)');
+  t3.arguments[0] = x.left;
+  t3.arguments[1] = x.right;
+  const t4 = expr('a = b');
+  t4.left = x.left;
+  t4.right = t3;
+  return t4;
+};
+
+const UpdateExpression = function(x) {
+  const op = x.operator;
+  const t3 =
+        x.prefix ?
+        expr('_state.liftFunction(1, a => a)(A, ' + op + 'A.value)') :
+  expr('_state.liftFunction(1, a => a)(A, A.value' + op + ')');
+  t3.arguments[0] = x.argument;
+  t3.arguments[1].argument.object = x.argument;
+  return t3;
+};
+
+const BinaryExpression = function(x) {
+  const op = x.operator;
+  const t3 =
+        expr('_state.liftFunction(2, (a, b) => a ' + op + ' b)(A, B)');
+  t3.arguments[0] = x.left;
+  t3.arguments[1] = x.right;
+  return t3;
+};
+
+const Literal = function(x, list, localFunctions, idCounter) {
+  const funName = 'getLiteral' + idCounter[0];
+  const t2 =
+        esprima.parse(
+          'const ' + funName +
+          ' = function(_state) {\n' +
+          'return _state.liftValue(a, _state.getLiteral' + idCounter[0] + '.lastUpdate, ' + idCounter[0] + ')' +
+          '};\n');
+  const t3 = t2.body[0].declarations[0].init.body.body[0].argument;
+  t3.arguments[0] = x;
+  const newBody = escodegen.generate(t2);
+  list.push({
+    funName: funName,
+    body: newBody
+  });
+  idCounter[0]++;
+
+  return expr('_state.' + funName + '(_state)');
+};
+
 export const SyntaxRewrite = {
-    AssignmentExpression: 'AssignmentExpression',
+    AssignmentExpression: AssignmentExpression,
     AssignmentPattern: 'AssignmentPattern',
     ArrayExpression: 'ArrayExpression',
     ArrayPattern: 'ArrayPattern',
     ArrowFunctionExpression: 'ArrowFunctionExpression',
     AwaitExpression: 'AwaitExpression',
     BlockStatement: 'BlockStatement',
-    BinaryExpression: 'BinaryExpression',
+    BinaryExpression: BinaryExpression,
     BreakStatement: 'BreakStatement',
-    CallExpression: 'CallExpression',
+    CallExpression: CallExpression,
     CatchClause: 'CatchClause',
     ClassBody: 'ClassBody',
     ClassDeclaration: 'ClassDeclaration',
@@ -31,10 +107,10 @@ export const SyntaxRewrite = {
     ExportNamedDeclaration: 'ExportNamedDeclaration',
     ExportSpecifier: 'ExportSpecifier',
     ExpressionStatement: 'ExpressionStatement',
-    ForStatement: 'ForStatement',
+    ForStatement: ForStatement,
     ForOfStatement: 'ForOfStatement',
     ForInStatement: 'ForInStatement',
-    FunctionDeclaration: 'FunctionDeclaration',
+    FunctionDeclaration: FunctionDeclaration,
     FunctionExpression: 'FunctionExpression',
     Identifier: 'Identifier',
     IfStatement: 'IfStatement',
@@ -43,7 +119,7 @@ export const SyntaxRewrite = {
     ImportDefaultSpecifier: 'ImportDefaultSpecifier',
     ImportNamespaceSpecifier: 'ImportNamespaceSpecifier',
     ImportSpecifier: 'ImportSpecifier',
-    Literal: 'Literal',
+    Literal: Literal,
     LabeledStatement: 'LabeledStatement',
     LogicalExpression: 'LogicalExpression',
     MemberExpression: 'MemberExpression',
@@ -68,7 +144,7 @@ export const SyntaxRewrite = {
     ThrowStatement: 'ThrowStatement',
     TryStatement: 'TryStatement',
     UnaryExpression: 'UnaryExpression',
-    UpdateExpression: 'UpdateExpression',
+    UpdateExpression: UpdateExpression,
     VariableDeclaration: 'VariableDeclaration',
     VariableDeclarator: 'VariableDeclarator',
     WhileStatement: 'WhileStatement',
@@ -143,79 +219,16 @@ export function addValueTrack(code, parsed) {
   const list = [];
   const localFunctions = {};
   
-  let idCounter = 0;
+  let idCounter = [0];
 
   const pp = (code, parentNode, x) => {
     
     if (typeof SyntaxRewrite[x.type] !== 'string') {
-      return SyntaxRewrite[x.type](x);
-    }
-    
-    if (x.type === 'ForStatement') {
-      const t = expr('_state.unliftValue(x)');
-      t.arguments[0] = x.test;
-      x.test = t;
-      return x;
-  	} else if (x.type === 'FunctionDeclaration') {
-      // Add _state as first parameter
-      x.params.unshift(expr('_state'));
-      return x;
-    } else if (x.type === 'CallExpression') {
-      if (localFunctions[x.callee.name] !== undefined) {
-        // Add _state as first argument
-        x.arguments.unshift(expr('_state'));
-        
-        // Replace function with _state.function
-        x.callee = expr('_state.' + x.callee.name);
-      }
-      return x;
-    } else if (x.type === 'AssignmentExpression') {
-      const op = x.operator[0];
-      const t3 =
-      	expr('_state.liftFunction(2, (a, b) => a ' + op + ' b)(A, B)');
-      t3.arguments[0] = x.left;
-      t3.arguments[1] = x.right;
-      const t4 = expr('a = b');
-      t4.left = x.left;
-      t4.right = t3;
-      return t4;
-    } else if (x.type === 'UpdateExpression') {
-      const op = x.operator;
-      const t3 =
-        x.prefix ?
-        	expr('_state.liftFunction(1, a => a)(A, ' + op + 'A.value)') :
-      		expr('_state.liftFunction(1, a => a)(A, A.value' + op + ')');
-      t3.arguments[0] = x.argument;
-      t3.arguments[1].argument.object = x.argument;
-      return t3;
-  	} else if (x.type === 'BinaryExpression') {
-      const op = x.operator;
-      const t3 =
-      	expr('_state.liftFunction(2, (a, b) => a ' + op + ' b)(A, B)');
-      t3.arguments[0] = x.left;
-      t3.arguments[1] = x.right;
-      return t3;
-    } else if (x.type === 'Literal') {
-      const funName = 'getLiteral' + idCounter;
-      const t2 =
-        esprima.parse(
-          'const ' + funName +
-          ' = function(_state) {\n' +
-          'return _state.liftValue(a, _state.getLiteral' + idCounter + '.lastUpdate, ' + idCounter + ')' +
-          '};\n');
-      const t3 = t2.body[0].declarations[0].init.body.body[0].argument;
-      t3.arguments[0] = x;
-      const newBody = escodegen.generate(t2);
-      list.push({
-        funName: funName,
-        body: newBody
-      });
-      idCounter++;
-      
-      return expr('_state.' + funName + '(_state)');
+      return SyntaxRewrite[x.type](x, list, localFunctions, idCounter);
     } else {
       return x;
     }
+    
   };
   
   // Get local functions
