@@ -142,7 +142,8 @@ function expandMacros(parsed) {
           const toEval = code.substring(c, d);
           const fn = eval(toEval);
           const result = fn(parsed);
-          const middle = '{\n' + result + '\n}';
+          const comment = "// This function is auto-generated on save\n";
+          const middle = '{\n' + comment + result + '\n}';
           const after = code.substring(b);
 
           const newCode = before + middle + after;
