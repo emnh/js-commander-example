@@ -213,9 +213,25 @@ function addColorConfig(state, name, value) {
   return state;
 }
 
+function functionList(parseTree) {
+	return 'return 2;';  
+}
+
+function expandMacro(f, result) {
+  // When file is saved and parsed successfully,
+  // expandMacro(f, function() { })
+  // is automatically replaced with
+  // expandMacro(f, function() { f() })
+  return result();
+}
+
 function main() {
   const immer = require("immer");
   const produce = immer.produce;
+  
+  const funtree = expandMacro(functionList, function() {
+    
+  });
 
   const steps = [];
 
