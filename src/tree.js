@@ -1,5 +1,3 @@
-/* jshint esversion: 6 */
-
 require('jquery.fancytree/dist/skin-lion/ui.fancytree.css');
 
 const $ = require('jquery');

@@ -1,5 +1,3 @@
-/* jshint esversion: 6 */
-
 const $ = require('jquery');
 const immer = require("immer");
 const produce = immer.produce;
