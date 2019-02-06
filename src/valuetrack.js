@@ -19,15 +19,30 @@ const FunctionDeclaration = function(x) {
   return x;
 };
 
-const CallExpression = function(x, list, localFunctions) {
+const CallExpression = function(x, list, localFunctions, idCounter, libFunctions) {
+  
   if (localFunctions[x.callee.name] !== undefined) {
     // Add _state as first argument
     x.arguments.unshift(expr('_state'));
-
-    // Replace function with _state.function
-    x.callee = expr('_state.' + x.callee.name);
+  } else {
+    for (let i = 0; i < x.arguments.length; i++) {
+      const t = expr('_state.unliftValue(x)');
+      t.arguments[0] = x.arguments[i];
+      x.arguments[i] = t;
+    }
+    
+    const name = escodegen.generate(x.callee).replace('_state.', '').split(/[\.(]/)[0];
+    //console.log("x", escodegen.generate(x), name);
+    libFunctions.push(name);
   }
-  return x;
+  
+  // Replace function(...) with _state.function(...)
+  const xs = escodegen.generate(x);
+  
+  const pfx = (xs.indexOf('_state.') === 0) ? '' : '_state.';
+  const t = expr(pfx + xs);
+
+  return t;
 };
 
 const AssignmentExpression = function(x) {
@@ -218,13 +233,14 @@ function expr(code) {
 export function addValueTrack(code, parsed) {
   const list = [];
   const localFunctions = {};
+  const libFunctions = [];
   
   let idCounter = [0];
 
   const pp = (code, parentNode, x) => {
     
     if (typeof SyntaxRewrite[x.type] !== 'string') {
-      return SyntaxRewrite[x.type](x, list, localFunctions, idCounter);
+      return SyntaxRewrite[x.type](x, list, localFunctions, idCounter, libFunctions);
     } else {
       return x;
     }
@@ -245,23 +261,28 @@ export function addValueTrack(code, parsed) {
 
   // Rewrite function graph
   for (let i = 0; i < parsed.body.length; i++) {
-      let decl = parsed.body[i];
-      if (decl.type === 'ExportNamedDeclaration')  {
-        decl = decl.declaration;
-      }
-      if (decl.type === 'FunctionDeclaration')  {
-        const funName = decl.id.name;
-        const template = esprima.parse('const ' + funName + ' = 0;');
+    let decl = parsed.body[i];
+    if (decl.type === 'ExportNamedDeclaration')  {
+      decl = decl.declaration;
+    }
+    if (decl.type === 'FunctionDeclaration')  {
+      const funName = decl.id.name;
+      const template = esprima.parse('const ' + funName + ' = 0;');
 
-        decl.id.name = 'REPLACE';
-        const rdecl = rewrite(code, decl, pp);
-        template.body[0].declarations[0].init = rdecl;
-        const newBody = escodegen.generate(template).replace(' REPLACE', '');
-        list.push({
-          funName: funName,
-          body: newBody
-        });
-      }
+      decl.id.name = 'REPLACE';
+      const rdecl = rewrite(code, decl, pp);
+      template.body[0].declarations[0].init = rdecl;
+      const newBody = escodegen.generate(template).replace(' REPLACE', '');
+      list.push({
+        funName: funName,
+        body: newBody
+      });
+    } else {
+      list.push({
+        funName: undefined,
+        body: escodegen.generate(decl)
+      });
+    }
   }
   
   list.push({
@@ -277,11 +298,13 @@ export function addValueTrack(code, parsed) {
     body: 'const liftFunction = ' + liftFunction.toString() + ';\n\n'
   });
   
+  const locfuns = list.map(x => '  ' + x.funName + ": " + x.funName);
+  const libfuns = libFunctions.map(x => '  ' + x + ": 'lib'");
   const ret =
     '(function() {\n' +
   	(list.map(x => x.body)).join('\n\n') +
     '\n\nreturn {\n' +
-    (list.map(x => '  ' + x.funName + ": " + x.funName)).join(', \n') +
+    locfuns.concat(libfuns).join(', \n') +
     '\n};\n\n' +
     '});\n';
   return ret;
@@ -293,10 +316,18 @@ function getStamp() {
 }
 
 export function applyUpdate(funGraphA, funGraphB) {
+  for (let key in funGraphB) {
+    if (funGraphB[key] === 'lib') {
+      if (window.App[key] === undefined) {
+        throw new Error('Missing library in window.App: ' + key);
+      }
+      funGraphB[key] = window.App[key];
+    }
+    funGraphB[key].lastUpdate = getStamp();
+  }
   if (funGraphA !== undefined) {
     const funGraphC = {};
     for (let key in funGraphB) {
-      funGraphB[key].lastUpdate = getStamp();
       // Compare function bodies, update if necessary
       if (funGraphA[key] !== undefined) {
       	//console.log("body", key, funGraphA[key].toString(), funGraphB[key].toString());
@@ -310,13 +341,80 @@ export function applyUpdate(funGraphA, funGraphB) {
     }
     return funGraphC;
   }
-  for (let key in funGraphB) {
-    funGraphB[key].lastUpdate = getStamp();
-  }
   return funGraphB;
 }
 
 //console.log(esprima.parse('fun += 2;'));
+
+export function funGraph2() {
+  function getLibs(state) {
+    const $ = require('jquery');
+    const immer = require("immer");
+    const produce = immer.produce;
+
+    return produce(state, s => {
+      s.$ = $;
+      s.produce = produce;
+    });
+  }
+
+  function resetTarget(state) {
+    const target = state.$(state.target);
+    target.empty();
+    return state;
+  }
+
+  function addCanvas(state) {
+    const target = state.$(state.target);
+    target.append("<canvas/>");
+    target.css("margin", "0px");
+    target.css("overflow", "hidden");
+    const canvas = target.find("canvas")[0];
+    return state.produce(state, s => {
+      s.canvas = canvas;
+    });
+  }
+
+  function addFPSCanvas(state) {
+    const target = state.$(state.target);
+    target.append("<canvas id='fpsCanvas' width='60' height='30'/>");
+    const jqCanvas = target.find("#fpsCanvas");
+    jqCanvas
+      .css("position", "absolute")
+      .css("top", "0px")
+      .css("left", "0px");
+      //.css("margin-top", "-" + 2 * state.$(state.target).height() + "px");
+    const canvas = jqCanvas[0];
+    const ctx = canvas.getContext("2d");
+    return state.produce(state, s => {
+      s.fpsCanvas = canvas;
+      s.fpsCtx = ctx;
+    });
+  }
+
+  function resizeCanvas(state) {
+    state.canvas.width = state.$(state.target).width();
+    state.canvas.height = state.$(state.target).height();
+    return state;
+  }
+
+  function get2DContext(state) {
+    const ctx = state.canvas.getContext("2d");
+    return state.produce(state, s => {
+      s.ctx = ctx;
+    });
+  }
+
+  function drawSplit(canvas, ctx, color1, color2) {
+    const mid = canvas.height / 2;
+    const split = Math.floor(mid + mid * Math.sin(new Date().getTime() * 1.0 / 1000.0) / 2);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = color1;
+    ctx.fillRect(0, 0, canvas.width, split);
+    ctx.fillStyle = color2;
+    ctx.fillRect(0, split, canvas.width, canvas.height - split);
+  }
+}
 
 export function funGraph() {
   function sum(a, b) {
@@ -334,6 +432,7 @@ export function funGraph() {
   }
 
   function main() {
+    $('#stepContent').empty().append('<h1>hello</h1>');
     console.log(calc());
   }
 }

@@ -365,7 +365,7 @@ updateTick: [updateTick]
     ];
   }));
 
-  tutorial.setupTutorial(steps);
+  //tutorial.setupTutorial(steps);
   
   //console.log("main done");
   
@@ -374,7 +374,6 @@ updateTick: [updateTick]
 
 function update(funGraph) {
   funGraph = valuetrack.applyUpdate(window.App.funGraph, funGraph());
-  
   /*funGraph.sum = function(_state, a, b) {
     return _state.liftFunction((a, b) => a + b)(a, b);
   };*/
@@ -421,6 +420,8 @@ function main() {
   window.App.macros = macros;
   window.App.valuetrack = valuetrack;
   window.App.update = update;
+  window.App.$ = require('jquery');
+  window.App.console = console;
 
   const body = valuetrack.funGraph.toString();
   
