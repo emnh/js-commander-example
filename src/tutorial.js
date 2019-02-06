@@ -1,4 +1,4 @@
-/*jshint esversion: 6 */
+/* jshint esversion: 6 */
 
 const $ = require('jquery');
 const immer = require("immer");
@@ -20,6 +20,12 @@ export function evaluateCall(state, fn) {
   return fn.ret(state, ret);
 }
 
+export function getEvaluateCall(fn) {
+  return function(s) {
+    return evaluateCall(s, fn);
+  };
+}
+
 export function evaluate(step, fname, state, callback, noeval, mainBody) {
   const fns = step.funtree[fname];
   const toplevel = mainBody === undefined;
@@ -38,9 +44,7 @@ export function evaluate(step, fname, state, callback, noeval, mainBody) {
     if (typeof fn === 'string') {
       newState = evaluate(step, fn, newState, callback, noeval, mainBody);
     } else if (fn.hasOwnProperty('call')) {
-      const efn = function(s) {
-        return evaluateCall(s, fn);
-      };
+      const efn = getEvaluateCall(fn);
       if (noeval === undefined) {
         newState = efn(newState);
         if (newState === null || newState === undefined) {
