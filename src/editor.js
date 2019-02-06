@@ -6,6 +6,7 @@ import 'jquery.fancytree/dist/skin-lion/ui.fancytree.css';
 const $ = require('jquery');
 const d3 = require('d3');
 const c3 = require('c3');
+const macros = require('./macros.js');
 
 const jshint = require('jshint');
 window.JSHINT = jshint.JSHINT;
@@ -128,28 +129,38 @@ function expandMacros(parsed) {
         //console.log("parent", tt.parent);
         //console.log("child", t.callee.name, t);
         try {
+          const frange = t.arguments[0].range;
+          const c = frange[0];
+          const d = frange[1];
+
           const range = t.arguments[1].body.range;
           const a = range[0];
           const b = range[1];
   
           const code = state.cm.getDoc().getValue();
           const before = code.substring(0, a);
-          const middle = 'return 2;';
+          const toEval = code.substring(c, d);
+          const fn = eval(toEval);
+          const result = fn(parsed);
+          const middle = '{\n' + result + '\n}';
           const after = code.substring(b);
 
           const newCode = before + middle + after;
+
+          //console.log("newCode", newCode);
 
           if (newCode !== code) {
             // Make sure new code also parses
             const parsed2 = esprima.parseModule(newCode, { range: true, loc: true });
 
-            state.cm.getDoc().setValue();
+            state.cm.getDoc().setValue(newCode);
 
             return true;
           }
 
         } catch (err) {
           console.log("error expanding macro", err);
+          return false;
         }
       }
       for (let child in t) {

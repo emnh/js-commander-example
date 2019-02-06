@@ -13,6 +13,8 @@
 const webgl = require('./webgl.js');
 const editor = require('./editor.js');
 const tutorial = require('./tutorial.js');
+const macros = require('./macros.js');
+const expandMacro = macros.expandMacro;
 
 function getLibs(state) {
   const $ = require('jquery');
@@ -213,56 +215,58 @@ function addColorConfig(state, name, value) {
   return state;
 }
 
-function functionList(parseTree) {
-	return 'return 2;';  
-}
-
-function expandMacro(f, result) {
-  // When file is saved and parsed successfully,
-  // expandMacro(f, function() { })
-  // is automatically replaced with
-  // expandMacro(f, function() { f() })
-  return result();
-}
-
 function main() {
   const immer = require("immer");
   const produce = immer.produce;
   
-  const funtree = expandMacro(functionList, function() {
-    
-  });
+  const funtree = expandMacro(macros.functionTree, function() {
+return {
+addAndUpdateTick: [addAndUpdateTick],
+addCanvas: [addCanvas],
+addColorConfig: [addColorConfig],
+addConfig: [addConfig],
+addFPSCanvas: [addFPSCanvas],
+addTick: [addTick],
+drawFPS: [drawFPS],
+drawSplit: [drawSplit],
+get2DContext: [get2DContext],
+getLibs: [getLibs],
+main: [main],
+resetTarget: [resetTarget],
+resizeCanvas: [resizeCanvas],
+serializeConfig: [serializeConfig],
+updateTick: [updateTick]
+};
+});
+  
+  const funtree2 = produce(funtree, f => f);
 
   const steps = [];
 
   steps.push({
     title: ['2D', 'Draw Orange + Black'],
     state: {},
-    funtree: {
-      getLibs: [getLibs],
-      resetTarget: [resetTarget],
-      addCanvas: [addCanvas],
-      resizeCanvas: [resizeCanvas],
-      getContext: [get2DContext],
-      anim: [
+    funtree: produce(funtree2, f => {
+      f.getContext = [get2DContext];
+      f.anim = [
         { 
          call: drawSplit,
          args: s => ([s.canvas, s.ctx, "orange", "black"]),
          ret: (s, x) => s
         }
-      ],
-      prepare: [
+      ];
+      f.prepare = [
         'getLibs',
         'resetTarget',
         'addCanvas',
         'resizeCanvas',
         'getContext',
-      ],
-      main: [
+      ];
+      f.main =[
         'prepare',
         'anim'
-      ],
-    }
+      ];
+    })
   });
 
   steps.push(produce(steps[steps.length - 1], s => {
@@ -307,7 +311,6 @@ function main() {
         ret: (s, x) => s
       }
     ];
-    s.funtree.addConfig = [addConfig];
     s.funtree.prepare.push('addConfig');
     s.funtree.addColorConfig = [
       {
