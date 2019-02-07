@@ -6,9 +6,6 @@ const expandMacro = macros.expandMacro;
 const escope = require('escope');
 const estraverse = require('estraverse');
 
-/* List of syntax nodes from
-* https://github.com/jquery/esprima/blob/master/src/syntax.ts .*/
-
 const ForStatement = function(x) {
   const t = expr('_state.unliftValue(x)');
   t.arguments[0] = x.test;
@@ -43,8 +40,12 @@ const CallExpression = function(x, opts) {
     // Add _state as first argument
     x.arguments.unshift(expr('_state'));
   } else {
-    const t = expr('_state.liftFunction()');
-  	console.log("x", escodegen.generate(x));
+    const t = expr('x.call(args)');
+    t.callee.object = x.callee;
+    t.arguments = x.arguments;
+    console.log("t", t);
+  	console.log("xx", escodegen.generate(x));
+    return t;
   }
   
   return x;
@@ -192,19 +193,20 @@ const Identifier = function(x, opts) {
   const pfx = usePrefix ? '_state.' : '';
   const liftFun =
   	usePrefix ?
-        (x => '_state.liftFunction(null, ' + x + ')') :
+        //(x => '_state.liftFunction(null, ' + x + ')') :
+  		x => x :
   		x => x;
   const e = liftFun(pfx + x.name);
   if (usePrefix) {
     opts.libFunctions[x.name] = true;
-  	console.log("id", e, isMember, x === x.parent.property);
+  	//console.log("id", e, isMember, x === x.parent.property);
   }
   const t = expr(e);
   
   return t;
 };
 
-const MemberExpression = function(x) {
+const MemberExpression = function(x, opts) {
   
   //logNode("mm", x);
   //console.log("member", x.computed, escodegen.generate(x));
@@ -218,18 +220,28 @@ const MemberExpression = function(x) {
     x = t;
   } else {
     const name = escodegen.generate(x.property);
+    
+    const fname = 'getMember' + name;
+    const fbody = 'const ' + fname + ' = _state => _state.liftFunction(1, a => a.' + name + ');';
+    opts.register(fname, fbody);
+    
     const t =
-      expr('_state.liftFunction(1, a => a.' + name + ')(A)');
+      expr(fname + '(_state, A)');
+      // expr('_state.liftFunction(1, a => a.' + name + ', "arg0")(A)');
     const t2 = expr(escodegen.generate(x.object));
-    t.arguments[0] = t2;
+    //t.callee.arguments[2] = t2;
+    t.arguments[1] = t2;
+    //const t3 = expr("identity(" + escodegen.generate(t) + ")");
     x = t;
   }
   
-  console.log("member", x);
+  //console.log("member", x);
   
   return x;
 };
 
+/* List of syntax nodes from
+* https://github.com/jquery/esprima/blob/master/src/syntax.ts .*/
 export const SyntaxRewrite = {
     AssignmentExpression: AssignmentExpression,
     AssignmentPattern: 'AssignmentPattern',
@@ -349,6 +361,10 @@ const unliftValue = function(obj) {
   return obj.value;
 };
 
+const identity = function(x) {
+  return x;
+};
+
 const liftFunction = function(numArgs, f, bindThis) {
   const isFunction = function(obj) {
     return !!(obj && obj.constructor && obj.call && obj.apply);
@@ -363,13 +379,18 @@ const liftFunction = function(numArgs, f, bindThis) {
     return f; //function() { return f; };
     //throw new Error('f is not a function');
   }
-  return function() {
+  const fret = function() {
     const args = 
           numArgs === null ?
           	Array.prototype.slice.call(arguments) :
           	Array.prototype.slice.call(arguments, 0, numArgs);
    	//console.log("applying", f, "args", args);
     let ret = null;
+    console.log("bindThis", bindThis);
+    if (bindThis !== undefined && bindThis.hasOwnProperty('lifted')) {
+      bindThis = bindThis.value;
+      console.log("bindThis2", bindThis);
+    }
     if (args.length === 0) {
       ret = {
         lastUpdate: Math.round(new Date().getTime() / 1000.0),
@@ -392,18 +413,26 @@ const liftFunction = function(numArgs, f, bindThis) {
         lifted: true
       };
     }
-    console.log("ret", ret);
+    //console.log("ret", ret);
     if (isFunction(ret.value)) {
-      console.log("ret.value is a function", ret.value, args[0].value);
+      //ret.call = ret.value;
+      ret.call = fret;
+    } else {
+      ret.call = fret;
+    }
+    /*
+    if (isFunction(ret.value)) {
+      //console.log("ret.value is a function", ret.value, ret.value.length, args[0].value);
       const ret2 = liftFunction(null, ret.value, args[0].value);
       ret2.lastUpdate = ret.lastUpdate;
       ret2.deps  = ret.deps;
-      ret2.value = ret.value;
+      ret2.value = ret.value.bind(args[0].value);
       ret2.lifted = ret.lifted;
       return ret2;
-    }
+    }*/
     return ret;
   };
+  return fret;
 };
 
 function expr(code) {
@@ -454,6 +483,18 @@ export function addValueTrack(code, parsedContainer) {
   
   const parsed = rewrite(code, parsed2, addParents);
   
+  const registered = {};
+  const register = function(fname, fbody) {
+    if (registered[fname] !== undefined) {
+      return;
+    }
+    registered[fname] = true;
+    list.push({
+      funName: fname,
+      body: fbody
+    });
+  };
+  
   const pp = (code, parentNode, x, scope) => {
     
     if (typeof SyntaxRewrite[x.type] !== 'string') {
@@ -462,7 +503,8 @@ export function addValueTrack(code, parsedContainer) {
         localFunctions: localFunctions,
         idCounter: idCounter,
         libFunctions: libFunctions,
-        scope: scope
+        scope: scope,
+        register: register
       };
       return SyntaxRewrite[x.type](x, opts);
     } else {
@@ -510,6 +552,10 @@ export function addValueTrack(code, parsedContainer) {
   }
   
   list.push({
+    funName: 'identity',
+    body: 'const identity = ' + identity.toString() + ';\n\n'
+  });
+  list.push({
     funName: 'liftValue',
     body: 'const liftValue = ' + liftValue.toString() + ';\n\n'
   });
@@ -521,6 +567,7 @@ export function addValueTrack(code, parsedContainer) {
     funName: 'liftFunction',
     body: 'const liftFunction = ' + liftFunction.toString() + ';\n\n'
   });
+  
   
   const locfuns = list.map(x => '  ' + x.funName + ": " + x.funName);
   
@@ -610,6 +657,8 @@ export function funGraph() {
   
   function main() {
     const target = $('#stepContent');
+    console.log("target", target);
+    
     resetTarget(target);
     const canvas = addCanvas(target);
     resizeCanvas(canvas, target);
