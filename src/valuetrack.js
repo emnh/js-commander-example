@@ -7,6 +7,8 @@ const immer = require('immer');
 const produce = immer.produce;
 const expandMacro = macros.expandMacro;
 
+const webpackRequire = '__webpack_require__';
+
 const isFunction = function(obj) {
   return !!(obj && obj.constructor && obj.call && obj.apply);
 };
@@ -95,11 +97,12 @@ YieldExpression
 const defaultHandler = function(x) { return x; };
 
 const AssignmentExpression = function(x) {
-  console.log("ASSIGN", escodegen.generate(x), x);
-  if (x.left.callee.property.name === 'fmember') {
-    x.left.arguments[2] = expr('true');
-    x.left.arguments[3] = x.right;
-    console.log("ASSIGN2", escodegen.generate(x.left));
+  //console.log("ASSIGN", escodegen.generate(x), x);
+  if (x.left.type === 'CallExpression' &&
+      x.left.arguments[1].property.name === 'fmember') {
+    x.left.arguments[5] = expr('true');
+    x.left.arguments[6] = x.right;
+    //console.log("ASSIGN2", escodegen.generate(x.left));
     return x.left;
   }
   //const m = matchNode(x, 'const A = __webpack_require__("B");');
@@ -112,24 +115,32 @@ const ArrayPattern = defaultHandler;
 const ArrowFunctionExpression = defaultHandler;
 const AwaitExpression = defaultHandler;
 const BlockStatement = defaultHandler;
-const BinaryExpression = defaultHandler;
+const BinaryExpression = function(x) {
+  console.log("BIN", x);
+  const t = expr('_state.fcall(_state, (a, b) => a + b, null, X, Y)');
+  //console.log("T", t);
+  t.arguments[1].body.operator = x.operator;
+  t.arguments[3 + 0] = x.left;
+  t.arguments[3 + 1] = x.right;
+  return t;
+};
 const BreakStatement = defaultHandler;
 const CallExpression = function(x, opts) {
-  if (x.callee.name === '__webpack_require__') {
+  if (x.callee.name === webpackRequire) {
     return x;
   }
   if (opts.localFunctions[x.callee.name] !== undefined) {
     // Add _state as first argument
     x.arguments.unshift(expr('_state'));
   }
-  const t = expr('_state.fcall(X, null)');
-  t.arguments[0] = x.callee;
+  const t = expr('_state.fcall(_state, X, null)');
+  t.arguments[1] = x.callee;
   //t.arguments[1] = expr('null');
   //if (x.parent.type === 'MemberExpression') {
   //	t.arguments[1] = x.parent.object;
   //}
   for (let i = 0; i < x.arguments.length; i++) {
-  	t.arguments[2 + i] = x.arguments[i];
+  	t.arguments[3 + i] = x.arguments[i];
   }
   //console.log("CALL", escodegen.generate(x), escodegen.generate(t));  
   return t;
@@ -156,10 +167,23 @@ const ForInStatement = defaultHandler;
 const FunctionDeclaration = function(x, opts) {
   opts.register(x.id.name, '');
   
+  //x.body.body.unshift(t);
+  
   // Add _state as first parameter
   x.params.unshift(expr('_state'));
   
-  return x;
+  const t = esprima.parse('const A = function() {}; A.local = true;');
+  const t2 = t.body[0];
+  
+  t2.declarations[0].id = x.id;
+  t2.declarations[0].init.params = x.params;
+  t2.declarations[0].init.body = x.body;
+  t.body[1].expression.left.object = x.id;
+  //t.declarations[1].property.id = x.id;
+  
+  console.log("FUN", t); //, escodegen.generate(t));
+  
+  return t;
 };
 
 const FunctionExpression = defaultHandler;
@@ -197,21 +221,65 @@ const ImportDeclaration = defaultHandler;
 const ImportDefaultSpecifier = defaultHandler;
 const ImportNamespaceSpecifier = defaultHandler;
 const ImportSpecifier = defaultHandler;
-const Literal = defaultHandler;
+
+const Literal = function(x, opts) {
+  
+  if (x.parent.type === 'CallExpression' && x.parent.callee.name === webpackRequire) {
+    return x;
+  }
+  
+  console.log("LITERAL", x);
+  
+  const list = opts.list;
+  const localFunctions = opts.localFunctions;
+  const idCounter = opts.idCounter;
+  const libFunctions = opts.libFunctions;
+  const scope = opts.scope;
+
+  const funName = 'getLiteral' + idCounter[0];
+  const t2 =
+        esprima.parse(
+          'const ' + funName +
+          ' = function(_state) {\n' +
+          'return _state.liftValue(a, _state.getLiteral' + idCounter[0] + '.lastUpdate, ' + idCounter[0] + ')' +
+          '};\n');
+  const t3 = t2.body[0].declarations[0].init.body.body[0].argument;
+  t3.arguments[0] = x;
+  const newBody = escodegen.generate(t2);
+  list.push({
+    funName: funName,
+    body: newBody
+  });
+  idCounter[0]++;
+
+  return expr('_state.' + funName + '(_state)');
+};
+
 const LabeledStatement = defaultHandler;
 const LogicalExpression = defaultHandler;
 const MemberExpression = function(x) {
   //console.log("MEMBER", escodegen.generate(x));
   
   if (!x.computed) {
-    const t = expr('_state.fmember(X, Y)');
-    t.arguments[0] = x.object;
-    t.arguments[1] = expr('"' + x.property.name + '"');
+    //const t = expr('_state.fmember(X, Y)');
+    //const t = expr('_state.fmember(X, Y)');
+    //t.arguments[0] = x.object;
+    //t.arguments[1] = expr('"' + x.property.name + '"');
+    
+    const t = expr('_state.fcall(_state, _state.fmember, null, X, Y)');
+    t.arguments[3 + 0] = x.object;
+    t.arguments[3 + 1] = expr('"' + x.property.name + '"');
+    
     //t.arguments[1] = expr('null');
     //if (x.parent.type === 'MemberExpression') {
     //	t.arguments[1] = x.parent.object;
     //}
     //console.log("MEMBER2", escodegen.generate(x), escodegen.generate(t));  
+    return t;
+  } else {
+    const t = expr('_state.fcall(_state, _state.fmember, null, X, Y)');
+    t.arguments[3 + 0] = x.object;
+    t.arguments[3 + 1] = x.property;
     return t;
   }
   
@@ -501,17 +569,30 @@ const liftFunction = function(numArgs, f, bindThis) {
   }
   const fret = function() {
     const args =
-          numArgs === null ?
-          	Array.prototype.slice.call(arguments) :
-          	Array.prototype.slice.call(arguments, 0, numArgs);
+      (numArgs === null ?
+        Array.prototype.slice.call(arguments) :
+        Array.prototype.slice.call(arguments, 0, numArgs))
+      .map(x => {
+        if (typeof x !== 'object' ||
+            (typeof x === 'object' && !x.hasOwnProperty('lifted'))) {
+          //console.log("argx", x, typeof x);
+          return liftValue(x, 0, '');
+      	}
+        return x;
+      });
+    
+    //console.log("ARGS", args);
+    
    	//console.log("applying", f, "args", args);
     let ret = null;
     console.log("bindThis", bindThis);
-    if (bindThis !== undefined && bindThis.hasOwnProperty('lifted')) {
+    if (bindThis !== null && bindThis !== undefined &&
+        bindThis.hasOwnProperty('lifted')) {
       bindThis = bindThis.value;
       console.log("bindThis2", bindThis);
     }
     if (args.length === 0) {
+      // TODO: use liftValue
       ret = {
         lastUpdate: Math.round(new Date().getTime() / 1000.0),
         deps: new Set([]), // TODO: f?
@@ -533,23 +614,6 @@ const liftFunction = function(numArgs, f, bindThis) {
         lifted: true
       };
     }
-    //console.log("ret", ret);
-    if (isFunction(ret.value)) {
-      //ret.call = ret.value;
-      ret.call = fret;
-    } else {
-      ret.call = fret;
-    }
-    /*
-    if (isFunction(ret.value)) {
-      //console.log("ret.value is a function", ret.value, ret.value.length, args[0].value);
-      const ret2 = liftFunction(null, ret.value, args[0].value);
-      ret2.lastUpdate = ret.lastUpdate;
-      ret2.deps  = ret.deps;
-      ret2.value = ret.value.bind(args[0].value);
-      ret2.lifted = ret.lifted;
-      return ret2;
-    }*/
     return ret;
   };
   return fret;
@@ -567,15 +631,33 @@ const fmember = function(obj, prop, isSet, value) {
   }
 };
 
-const fcall = function(f, bindThis) {
+const fcall = function(_state, f, bindThis) {
   //f = Function.prototype.bind(f, this);
-  console.log("fcall", f.name, f);
-  const args = Array.prototype.slice.call(arguments, 2);
+  console.log("fcall", f);
+  const args = Array.prototype.slice.call(arguments, 3);
   console.log("args", args);
   if (f.hasOwnProperty('lifted')) {
     f = f.value;
+    console.log("fcall2", f);
   }
-  return f.apply(bindThis, args);
+  if (_state === undefined) {
+    throw new Error('fcall with undefined _state');
+  }
+  const of = f;
+  if (!f.hasOwnProperty('local')) {
+    f = _state.liftFunction(null, f, bindThis);
+  }
+  const ret = f.apply(bindThis, args);
+  if (typeof ret !== 'object' ||
+      (typeof x === 'object' && !x.hasOwnProperty('lifted'))) {
+    console.log('WARNING: lifting result returned by fcall');
+    return liftValue(ret, 0, '');
+  }
+  if (Number.isNaN(ret.value)) {
+    throw new Error('NaN returned by fcall: ' + of.name + ":" + ret.value.toString());
+  }
+  console.log("fcall ret", of.name, ret);
+  return ret;
 };
 
 function expr(code) {
@@ -740,7 +822,7 @@ export function addValueTrack(code, parsedContainer) {
   const ret =
     '(function() {\n' +
   	(list.map(x => x.body)).join('\n\n') +
-    escodegen.generate(newParsed) +
+    newParsed.body.map(x => escodegen.generate(x)).join('\n') +
     '\n\nreturn {\n' +
     locfuns.concat(libfuns).join(', \n') +
     '\n};\n\n' +
