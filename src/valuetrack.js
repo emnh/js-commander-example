@@ -1,10 +1,15 @@
 const macros = require('./macros.js');
 const esprima = require('esprima');
 const escodegen = require('escodegen');
-const expandMacro = macros.expandMacro;
-
 const escope = require('escope');
 const estraverse = require('estraverse');
+const immer = require('immer');
+const produce = immer.produce;
+const expandMacro = macros.expandMacro;
+
+const isFunction = function(obj) {
+  return !!(obj && obj.constructor && obj.call && obj.apply);
+};
 
 const cmpNode = function(a, b) {
   //return JSON.stringify(a) === JSON.stringify(b);
@@ -15,6 +20,7 @@ const logNode = function(text, node) {
   console.log(text, expr(escodegen.generate(node)));
 };
 
+// Not used, just convenient to have here for reference
 const syntaxList = `
 AssignmentExpression
 AssignmentPattern
@@ -85,9 +91,21 @@ WithStatement
 YieldExpression
 `;
 
+
 const defaultHandler = function(x) { return x; };
 
-const AssignmentExpression = defaultHandler;
+const AssignmentExpression = function(x) {
+  console.log("ASSIGN", escodegen.generate(x), x);
+  if (x.left.callee.property.name === 'fmember') {
+    x.left.arguments[2] = expr('true');
+    x.left.arguments[3] = x.right;
+    console.log("ASSIGN2", escodegen.generate(x.left));
+    return x.left;
+  }
+  //const m = matchNode(x, 'const A = __webpack_require__("B");');
+  //if (m !== null) {
+  return x;
+};
 const AssignmentPattern = defaultHandler;
 const ArrayExpression = defaultHandler;
 const ArrayPattern = defaultHandler;
@@ -96,7 +114,27 @@ const AwaitExpression = defaultHandler;
 const BlockStatement = defaultHandler;
 const BinaryExpression = defaultHandler;
 const BreakStatement = defaultHandler;
-const CallExpression = defaultHandler;
+const CallExpression = function(x, opts) {
+  if (x.callee.name === '__webpack_require__') {
+    return x;
+  }
+  if (opts.localFunctions[x.callee.name] !== undefined) {
+    // Add _state as first argument
+    x.arguments.unshift(expr('_state'));
+  }
+  const t = expr('_state.fcall(X, null)');
+  t.arguments[0] = x.callee;
+  //t.arguments[1] = expr('null');
+  //if (x.parent.type === 'MemberExpression') {
+  //	t.arguments[1] = x.parent.object;
+  //}
+  for (let i = 0; i < x.arguments.length; i++) {
+  	t.arguments[2 + i] = x.arguments[i];
+  }
+  //console.log("CALL", escodegen.generate(x), escodegen.generate(t));  
+  return t;
+};
+
 const CatchClause = defaultHandler;
 const ClassBody = defaultHandler;
 const ClassDeclaration = defaultHandler;
@@ -114,9 +152,45 @@ const ExpressionStatement = defaultHandler;
 const ForStatement = defaultHandler;
 const ForOfStatement = defaultHandler;
 const ForInStatement = defaultHandler;
-const FunctionDeclaration = defaultHandler;
+
+const FunctionDeclaration = function(x, opts) {
+  opts.register(x.id.name, '');
+  
+  // Add _state as first parameter
+  x.params.unshift(expr('_state'));
+  
+  return x;
+};
+
 const FunctionExpression = defaultHandler;
-const Identifier = defaultHandler;
+
+const Identifier = function(x, opts) {
+  if (opts.libFunctions[x.name] !== undefined) {
+    
+    console.log("X", x);
+    
+    if (!(x.parent.type === 'MemberExpression' && cmpNode(x.parent.property, x))) {
+      const t = expr('_state.' + x.name);
+      return t;
+    }
+    
+    /*
+    let node = x;
+    let isLeftMost = true;
+    while (node !== undefined) {
+      node = node.parent;
+      isLeftMost = escodegen.generate(node).indexOf(x.name) === 0;
+      console.log("PARENT", node, node.type, escodegen.generate(node));
+      if (node.type.indexOf('Statement') >= 0) {
+        break;
+      }
+    }*/
+    
+    //const t = 
+  }
+  return x;
+};
+  
 const IfStatement = defaultHandler;
 const Import = defaultHandler;
 const ImportDeclaration = defaultHandler;
@@ -126,7 +200,23 @@ const ImportSpecifier = defaultHandler;
 const Literal = defaultHandler;
 const LabeledStatement = defaultHandler;
 const LogicalExpression = defaultHandler;
-const MemberExpression = defaultHandler;
+const MemberExpression = function(x) {
+  //console.log("MEMBER", escodegen.generate(x));
+  
+  if (!x.computed) {
+    const t = expr('_state.fmember(X, Y)');
+    t.arguments[0] = x.object;
+    t.arguments[1] = expr('"' + x.property.name + '"');
+    //t.arguments[1] = expr('null');
+    //if (x.parent.type === 'MemberExpression') {
+    //	t.arguments[1] = x.parent.object;
+    //}
+    //console.log("MEMBER2", escodegen.generate(x), escodegen.generate(t));  
+    return t;
+  }
+  
+  return x;
+};
 const MetaProperty = defaultHandler;
 const MethodDefinition = defaultHandler;
 const NewExpression = defaultHandler;
@@ -149,7 +239,126 @@ const ThrowStatement = defaultHandler;
 const TryStatement = defaultHandler;
 const UnaryExpression = defaultHandler;
 const UpdateExpression = defaultHandler;
-const VariableDeclaration = defaultHandler;
+
+function matchNode(toMatchNode, codeB) {
+
+  //console.log("MATCHING", escodegen.generate(toMatchNode), codeB);
+  
+  const matcher = (esprima.parse(codeB)).body[0];
+
+  const newNode = function(node, parents, props) {
+    return {
+      node: node,
+      parents: parents,
+      props: props
+    };
+  };
+  
+  const getPath = function(x) {
+    return x.props;
+  };
+  
+  const lookupSame = function(x) {
+    let other = toMatchNode;
+    for (let i = 0; i < x.props.length; i++) {
+      const prop = x.props[i];
+      if (other[prop] !== undefined) {
+        other = other[prop];
+        if (other === undefined) {
+          throw new Error('undefined');
+        }
+      } else {
+        return null;
+      }
+    }
+    return other;
+  };
+
+  const q = [
+    newNode(matcher, [], [])
+  ];
+
+  const pushProp = prop => p => {
+    p.push(prop);
+  };
+  
+  let matchCount = 0;
+  let nodeCount = 0;
+  
+  const ret = {};
+  
+  while (q.length > 0) {
+    const top = q[0];
+    q.shift();
+
+    const same = lookupSame(top);
+    nodeCount++;
+    if (same !== null) {
+    	matchCount++;
+    } else {
+      return null;
+    }
+    
+    //if () {
+    if (top.props[top.props.length - 1] !== 'type' &&
+        typeof top.node === 'string') {
+      //ret[getPath(top).join('/')] = [top.node, same];
+      ret[top.node] = same;
+    }
+    /*
+    console.log(
+      "top", 
+      getPath(top).join('/'),
+      top.node,
+      same);
+      */
+
+    const node = top.node;
+    const newParents = produce(top.parents, p => {
+      p.push(top);
+    });
+    if (node !== null && node !== undefined && node.hasOwnProperty('type')) {
+      for (var prop in node) {
+        const newProps = produce(top.props, pushProp(prop));
+        const value = node[prop];
+        if (prop === 'scope' || prop === 'parent') {
+
+        } else if (node.type == "Program" && prop == 'tokens') {
+
+        } else if (Array.isArray(value)) {
+          for (var i = 0; i < value.length; i++) {
+            const newProps2 = produce(newProps, pushProp(i));
+            q.push(newNode(value[i], newParents, newProps2));
+          }
+        } else {
+          q.push(newNode(value, newParents, newProps));
+        }
+      }
+    }
+  }
+  
+  //console.log("COUNT", nodeCount, matchCount);
+
+  return ret;
+}
+
+const VariableDeclaration = function(x, opts) {
+
+  const m = matchNode(x, 'const A = __webpack_require__("B");');
+  if (m !== null) {
+    //console.log("MATCH", m);
+    //console.log(m.A);
+    opts.libFunctions[m.A] = true;
+    //opts.register(m.A, '');
+    
+  	return {
+      type: 'EmptyStatement'
+    };
+  }
+
+  return x;
+};
+
 const VariableDeclarator = defaultHandler;
 const WhileStatement = defaultHandler;
 const WithStatement = defaultHandler;
@@ -159,72 +368,72 @@ const YieldExpression = defaultHandler;
 * https://github.com/jquery/esprima/blob/master/src/syntax.ts .*/
 export const SyntaxRewrite = {
     AssignmentExpression: AssignmentExpression,
-    AssignmentPattern: 'AssignmentPattern',
-    ArrayExpression: 'ArrayExpression',
-    ArrayPattern: 'ArrayPattern',
-    ArrowFunctionExpression: 'ArrowFunctionExpression',
-    AwaitExpression: 'AwaitExpression',
-    BlockStatement: 'BlockStatement',
+    AssignmentPattern: AssignmentPattern,
+    ArrayExpression: ArrayExpression,
+    ArrayPattern: ArrayPattern,
+    ArrowFunctionExpression: ArrowFunctionExpression,
+    AwaitExpression: AwaitExpression,
+    BlockStatement: BlockStatement,
     BinaryExpression: BinaryExpression,
-    BreakStatement: 'BreakStatement',
+    BreakStatement: BreakStatement,
     CallExpression: CallExpression,
-    CatchClause: 'CatchClause',
-    ClassBody: 'ClassBody',
-    ClassDeclaration: 'ClassDeclaration',
-    ClassExpression: 'ClassExpression',
-    ConditionalExpression: 'ConditionalExpression',
-    ContinueStatement: 'ContinueStatement',
-    DoWhileStatement: 'DoWhileStatement',
-    DebuggerStatement: 'DebuggerStatement',
-    EmptyStatement: 'EmptyStatement',
-    ExportAllDeclaration: 'ExportAllDeclaration',
-    ExportDefaultDeclaration: 'ExportDefaultDeclaration',
-    ExportNamedDeclaration: 'ExportNamedDeclaration',
-    ExportSpecifier: 'ExportSpecifier',
-    ExpressionStatement: 'ExpressionStatement',
+    CatchClause: CatchClause,
+    ClassBody: ClassBody,
+    ClassDeclaration: ClassDeclaration,
+    ClassExpression: ClassExpression,
+    ConditionalExpression: ConditionalExpression,
+    ContinueStatement: ContinueStatement,
+    DoWhileStatement: DoWhileStatement,
+    DebuggerStatement: DebuggerStatement,
+    EmptyStatement: EmptyStatement,
+    ExportAllDeclaration: ExportAllDeclaration,
+    ExportDefaultDeclaration: ExportDefaultDeclaration,
+    ExportNamedDeclaration: ExportNamedDeclaration,
+    ExportSpecifier: ExportSpecifier,
+    ExpressionStatement: ExpressionStatement,
     ForStatement: ForStatement,
-    ForOfStatement: 'ForOfStatement',
-    ForInStatement: 'ForInStatement',
+    ForOfStatement: ForOfStatement,
+    ForInStatement: ForInStatement,
     FunctionDeclaration: FunctionDeclaration,
-    FunctionExpression: 'FunctionExpression',
+    FunctionExpression: FunctionExpression,
     Identifier: Identifier,
-    IfStatement: 'IfStatement',
-    Import: 'Import',
-    ImportDeclaration: 'ImportDeclaration',
-    ImportDefaultSpecifier: 'ImportDefaultSpecifier',
-    ImportNamespaceSpecifier: 'ImportNamespaceSpecifier',
-    ImportSpecifier: 'ImportSpecifier',
+    IfStatement: IfStatement,
+    Import: Import,
+    ImportDeclaration: ImportDeclaration,
+    ImportDefaultSpecifier: ImportDefaultSpecifier,
+    ImportNamespaceSpecifier: ImportNamespaceSpecifier,
+    ImportSpecifier: ImportSpecifier,
     Literal: Literal,
-    LabeledStatement: 'LabeledStatement',
-    LogicalExpression: 'LogicalExpression',
+    LabeledStatement: LabeledStatement,
+    LogicalExpression: LogicalExpression,
     MemberExpression: MemberExpression,
-    MetaProperty: 'MetaProperty',
-    MethodDefinition: 'MethodDefinition',
+    MetaProperty: MetaProperty,
+    MethodDefinition: MethodDefinition,
     NewExpression: NewExpression,
-    ObjectExpression: 'ObjectExpression',
-    ObjectPattern: 'ObjectPattern',
-    Program: 'Program',
-    Property: 'Property',
-    RestElement: 'RestElement',
-    ReturnStatement: 'ReturnStatement',
-    SequenceExpression: 'SequenceExpression',
-    SpreadElement: 'SpreadElement',
-    Super: 'Super',
-    SwitchCase: 'SwitchCase',
-    SwitchStatement: 'SwitchStatement',
-    TaggedTemplateExpression: 'TaggedTemplateExpression',
-    TemplateElement: 'TemplateElement',
-    TemplateLiteral: 'TemplateLiteral',
-    ThisExpression: 'ThisExpression',
-    ThrowStatement: 'ThrowStatement',
-    TryStatement: 'TryStatement',
-    UnaryExpression: 'UnaryExpression',
+    ObjectExpression: ObjectExpression,
+    ObjectPattern: ObjectPattern,
+    Program: Program,
+    Property: Property,
+    RestElement: RestElement,
+    ReturnStatement: ReturnStatement,
+    SequenceExpression: SequenceExpression,
+    SpreadElement: SpreadElement,
+    Super: Super,
+    SwitchCase: SwitchCase,
+    SwitchStatement: SwitchStatement,
+    TaggedTemplateExpression: TaggedTemplateExpression,
+    TemplateElement: TemplateElement,
+    TemplateLiteral: TemplateLiteral,
+    ThisExpression: ThisExpression,
+    ThrowStatement: ThrowStatement,
+    TryStatement: TryStatement,
+    UnaryExpression: UnaryExpression,
     UpdateExpression: UpdateExpression,
-    VariableDeclaration: 'VariableDeclaration',
-    VariableDeclarator: 'VariableDeclarator',
-    WhileStatement: 'WhileStatement',
-    WithStatement: 'WithStatement',
-    YieldExpression: 'YieldExpression'
+    VariableDeclaration: VariableDeclaration,
+    VariableDeclarator: VariableDeclarator,
+    WhileStatement: WhileStatement,
+    WithStatement: WithStatement,
+    YieldExpression: YieldExpression
 };
 
 function walk(code, parentNode, node, postProcess, scope) {
@@ -281,10 +490,6 @@ const identity = function(x) {
 };
 
 const liftFunction = function(numArgs, f, bindThis) {
-  const isFunction = function(obj) {
-    return !!(obj && obj.constructor && obj.call && obj.apply);
-  };
-
   // skipAddValueTrack
   if (f.hasOwnProperty('lifted') && isFunction(f.value)) {
     f = f.value;
@@ -295,7 +500,7 @@ const liftFunction = function(numArgs, f, bindThis) {
     //throw new Error('f is not a function');
   }
   const fret = function() {
-    const args = 
+    const args =
           numArgs === null ?
           	Array.prototype.slice.call(arguments) :
           	Array.prototype.slice.call(arguments, 0, numArgs);
@@ -350,6 +555,29 @@ const liftFunction = function(numArgs, f, bindThis) {
   return fret;
 };
 
+const fmember = function(obj, prop, isSet, value) {
+  console.log("fmember", obj, prop, isSet, value);
+  if (isSet === undefined) {
+    const ret = obj[prop];
+    const ret2 = isFunction(ret) ? ret.bind(obj) : ret;
+    return ret2;
+  } else {
+    const ret = obj[prop] = value;
+    return ret;
+  }
+};
+
+const fcall = function(f, bindThis) {
+  //f = Function.prototype.bind(f, this);
+  console.log("fcall", f.name, f);
+  const args = Array.prototype.slice.call(arguments, 2);
+  console.log("args", args);
+  if (f.hasOwnProperty('lifted')) {
+    f = f.value;
+  }
+  return f.apply(bindThis, args);
+};
+
 function expr(code) {
   try {
   	return esprima.parse(code).body[0].expression;
@@ -359,7 +587,7 @@ function expr(code) {
   }
 }
 
-function addScope(ast) {  
+function addScope(ast) {
   const scopeManager = escope.analyze(ast);
   let currentScope = scopeManager.acquire(ast);   // global scope
 
@@ -382,11 +610,11 @@ export function addValueTrack(code, parsedContainer) {
   const list = [];
   const localFunctions = {};
   const libFunctions = {};
-  
+
   addScope(parsedContainer);
-  
+
   const parsed2 = parsedContainer.body[0].body;
-  
+
   let idCounter = [0];
 
   let nodeCounter = 0;
@@ -395,9 +623,9 @@ export function addValueTrack(code, parsedContainer) {
     x.parent = parentNode;
     return x;
   };
-  
+
   const parsed = rewrite(code, parsed2, addParents);
-  
+
   const registered = {};
   const register = function(fname, fbody) {
     if (registered[fname] !== undefined) {
@@ -409,9 +637,9 @@ export function addValueTrack(code, parsedContainer) {
       body: fbody
     });
   };
-  
+
   const pp = (code, parentNode, x, scope) => {
-    
+
     if (typeof SyntaxRewrite[x.type] !== 'string') {
       const opts = {
         list: list,
@@ -425,9 +653,9 @@ export function addValueTrack(code, parsedContainer) {
     } else {
       return x;
     }
-    
+
   };
-  
+
   // Get local functions
   for (let i = 0; i < parsed.body.length; i++) {
       let decl = parsed.body[i];
@@ -441,6 +669,9 @@ export function addValueTrack(code, parsedContainer) {
   }
 
   // Rewrite function graph
+  console.log("PARSED", parsed);
+  const newParsed = rewrite(code, parsed, pp);
+  /*
   for (let i = 0; i < parsed.body.length; i++) {
     let decl = parsed.body[i];
     if (decl.type === 'ExportNamedDeclaration')  {
@@ -464,8 +695,20 @@ export function addValueTrack(code, parsedContainer) {
         body: escodegen.generate(decl)
       });
     }
-  }
-  
+  }*/
+
+  list.push({
+    funName: 'isFunction',
+    body: 'const isFunction = ' + isFunction.toString() + ';\n\n'
+  });
+  list.push({
+    funName: 'fmember',
+    body: 'const fmember = ' + fmember.toString() + ';\n\n'
+  });
+  list.push({
+    funName: 'fcall',
+    body: 'const fcall = ' + fcall.toString() + ';\n\n'
+  });
   list.push({
     funName: 'identity',
     body: 'const identity = ' + identity.toString() + ';\n\n'
@@ -482,20 +725,22 @@ export function addValueTrack(code, parsedContainer) {
     funName: 'liftFunction',
     body: 'const liftFunction = ' + liftFunction.toString() + ';\n\n'
   });
-  
-  
+
   const locfuns = list.map(x => '  ' + x.funName + ": " + x.funName);
-  
+
   for (let key in libFunctions) {
     if (window.App[key] === undefined) {
       throw new Error('Missing library in window.App: ' + key);
     }
   }
+
+  const libfuns =
+        Object.keys(libFunctions).map(x => '  ' + x + ": liftValue(window.App." + x + ')');
   
-  const libfuns = Object.keys(libFunctions).map(x => '  ' + x + ": liftValue(window.App." + x + ')');
   const ret =
     '(function() {\n' +
   	(list.map(x => x.body)).join('\n\n') +
+    escodegen.generate(newParsed) +
     '\n\nreturn {\n' +
     locfuns.concat(libfuns).join(', \n') +
     '\n};\n\n' +
@@ -531,9 +776,8 @@ export function applyUpdate(funGraphA, funGraphB) {
   return funGraphB;
 }
 
-console.log(esprima.parse("const target = $('#stepContent')[0];"));
-
-export function funGraph2() {
+export function funGraph() {
+  const $ = require('jquery');
 
   function resetTarget(target) {
     console.log("target", target);
@@ -569,11 +813,11 @@ export function funGraph2() {
     ctx.fillStyle = color2;
     ctx.fillRect(0, split, canvas.width, canvas.height - split);
   }
-  
+
   function main() {
     const target = $('#stepContent');
     console.log("target", target);
-    
+
     resetTarget(target);
     const canvas = addCanvas(target);
     resizeCanvas(canvas, target);
@@ -582,18 +826,20 @@ export function funGraph2() {
   }
 }
 
-export function funGraph() {
+export function funGraph2() {
+  const $ = require('jquery');
+
   function sum(a, b) {
     return a + b;
   }
 
   function calc() {
     let s = 0;
-    
+
     for (let i = 0; i < 10; i++) {
       s += sum(1, i);
     }
-    
+
     return s;
   }
 
@@ -603,3 +849,9 @@ export function funGraph() {
   }
 }
 
+function ctest(x) {
+  console.log(esprima.parse(x));
+}
+
+ctest("const target = $('#stepContent')[0];");
+ctest("const $ = require('jquery')");

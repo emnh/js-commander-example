@@ -18,6 +18,7 @@ const memoize = require('./memoize.js');
 const expandMacro = macros.expandMacro;
 const valuetrack = require('./valuetrack.js');
 const esprima = require('esprima');
+const $ = require('jquery');
 
 function getLibs(state) {
   const $ = require('jquery');
@@ -433,7 +434,7 @@ function main() {
         'window.App.update' +
         valuetrack.addValueTrack(body, parsedContainer);
 
-  inject(script);
+  $(() => inject(script));
   
   /*
   const $ = require('jquery');
