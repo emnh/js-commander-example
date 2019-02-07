@@ -422,18 +422,25 @@ function main() {
   window.App.update = update;
   window.App.$ = require('jquery');
   window.App.console = console;
+  window.App.Date = Date;
+  window.App.Math = Math;
 
   const body = valuetrack.funGraph.toString();
   
   const parsedContainer = esprima.parse(body, { range: true, loc: true });
   
-  const parsed = parsedContainer.body[0].body;
-  
   const script =
         'window.App.update' +
-        valuetrack.addValueTrack(body, parsed);
+        valuetrack.addValueTrack(body, parsedContainer);
 
   inject(script);
+  
+  /*
+  const $ = require('jquery');
+  const f = $("#stepContent").empty.bind($("#stepContent"));
+  console.log("emptying");
+  f();
+  */
 }
 
 main();
