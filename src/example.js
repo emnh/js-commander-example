@@ -1,26 +1,3 @@
-# js-commander-example
-
-# Value tracking
-
-Value tracking allows a program to run incrementally, that is, with only
-changes recomputed. It includes a compiler which transforms the code such that
-every value is tracked, so that it can be tagged with its last update and its
-dependencies. In addition every expression and function call is redirected
-through a function which may be used to memoize them. The foundation for it is
-similar to F# Computation Expressions or perhaps monad transformers in other
-languages.
-
-For example let's transform the following code to track values:
-
-```javascript
-const a = 1;
-const b = 2;
-const c = a + b;
-```
-
-Transformed (by hand) (code also in src/example.js):
-
-```javascript
 const updateStep = function() {
   let updateCounter = 0;
   return () => updateCounter++;
@@ -86,20 +63,3 @@ console.log(c.value());
 updateLiteral(a, 3);
 console.log(c.value());
 console.log(c.value());
-```
-
-The output is:
-```
-Step 1
-3
-
-Step 2
-computing c for the first time
-computing a for the first time
-computing b for the first time
-3
-updating a to 3
-recomputing c because 4 <= 5
-5
-5
-```
