@@ -116,7 +116,7 @@ const ArrowFunctionExpression = defaultHandler;
 const AwaitExpression = defaultHandler;
 const BlockStatement = defaultHandler;
 const BinaryExpression = function(x) {
-  console.log("BIN", x);
+  //console.log("BIN", x);
   const t = expr('_state.fcall(_state, (a, b) => a + b, null, X, Y)');
   //console.log("T", t);
   t.arguments[1].body.operator = x.operator;
@@ -181,7 +181,7 @@ const FunctionDeclaration = function(x, opts) {
   t.body[1].expression.left.object = x.id;
   //t.declarations[1].property.id = x.id;
   
-  console.log("FUN", t); //, escodegen.generate(t));
+  //console.log("FUN", t); //, escodegen.generate(t));
   
   return t;
 };
@@ -191,7 +191,7 @@ const FunctionExpression = defaultHandler;
 const Identifier = function(x, opts) {
   if (opts.libFunctions[x.name] !== undefined) {
     
-    console.log("X", x);
+    //console.log("X", x);
     
     if (!(x.parent.type === 'MemberExpression' && cmpNode(x.parent.property, x))) {
       const t = expr('_state.' + x.name);
@@ -228,7 +228,7 @@ const Literal = function(x, opts) {
     return x;
   }
   
-  console.log("LITERAL", x);
+  //console.log("LITERAL", x);
   
   const list = opts.list;
   const localFunctions = opts.localFunctions;
@@ -563,7 +563,7 @@ const liftFunction = function(numArgs, f, bindThis) {
     f = f.value;
   }
   if (!isFunction(f)) {
-    console.log("f is not a function", f);
+    console.log("WARNING: f is not a function", f);
     return f; //function() { return f; };
     //throw new Error('f is not a function');
   }
@@ -575,7 +575,7 @@ const liftFunction = function(numArgs, f, bindThis) {
       .map(x => {
         if (typeof x !== 'object' ||
             (typeof x === 'object' && !x.hasOwnProperty('lifted'))) {
-          //console.log("argx", x, typeof x);
+          console.log("WARNING: lifting arg: ", x, typeof x);
           return liftValue(x, 0, '');
       	}
         return x;
@@ -585,11 +585,11 @@ const liftFunction = function(numArgs, f, bindThis) {
     
    	//console.log("applying", f, "args", args);
     let ret = null;
-    console.log("bindThis", bindThis);
+    //console.log("bindThis", bindThis);
     if (bindThis !== null && bindThis !== undefined &&
         bindThis.hasOwnProperty('lifted')) {
       bindThis = bindThis.value;
-      console.log("bindThis2", bindThis);
+      //console.log("bindThis2", bindThis);
     }
     if (args.length === 0) {
       // TODO: use liftValue
@@ -620,7 +620,7 @@ const liftFunction = function(numArgs, f, bindThis) {
 };
 
 const fmember = function(obj, prop, isSet, value) {
-  console.log("fmember", obj, prop, isSet, value);
+  //console.log("fmember", obj, prop, isSet, value);
   if (isSet === undefined) {
     const ret = obj[prop];
     const ret2 = isFunction(ret) ? ret.bind(obj) : ret;
@@ -633,13 +633,24 @@ const fmember = function(obj, prop, isSet, value) {
 
 const fcall = function(_state, f, bindThis) {
   //f = Function.prototype.bind(f, this);
-  console.log("fcall", f);
+  //console.log("fcall", f);
   const args = Array.prototype.slice.call(arguments, 3);
-  console.log("args", args);
   if (f.hasOwnProperty('lifted')) {
     f = f.value;
-    console.log("fcall2", f);
   }
+  
+  const fdesc =
+    f.name !== undefined ?
+      f.name :
+      f.toString();
+  
+  console.log("fcall", fdesc, args.map(x => {
+    if (typeof x === 'object' && x.hasOwnProperty('lifted')) {
+      return x.value;
+    }
+  	return x;  
+  }));
+  
   if (_state === undefined) {
     throw new Error('fcall with undefined _state');
   }
@@ -649,14 +660,14 @@ const fcall = function(_state, f, bindThis) {
   }
   const ret = f.apply(bindThis, args);
   if (typeof ret !== 'object' ||
-      (typeof x === 'object' && !x.hasOwnProperty('lifted'))) {
+      (typeof ret === 'object' && !ret.hasOwnProperty('lifted'))) {
     console.log('WARNING: lifting result returned by fcall');
     return liftValue(ret, 0, '');
   }
   if (Number.isNaN(ret.value)) {
     throw new Error('NaN returned by fcall: ' + of.name + ":" + ret.value.toString());
   }
-  console.log("fcall ret", of.name, ret);
+  //console.log("fcall ret", of.name, ret);
   return ret;
 };
 
@@ -751,7 +762,7 @@ export function addValueTrack(code, parsedContainer) {
   }
 
   // Rewrite function graph
-  console.log("PARSED", parsed);
+  // console.log("PARSED", parsed);
   const newParsed = rewrite(code, parsed, pp);
   /*
   for (let i = 0; i < parsed.body.length; i++) {
@@ -862,7 +873,7 @@ export function funGraph() {
   const $ = require('jquery');
 
   function resetTarget(target) {
-    console.log("target", target);
+    //console.log("target", target);
     target.empty();
   }
 
@@ -873,7 +884,7 @@ export function funGraph() {
     const jcanvas = target.find("canvas");
     //const canvas = target.find("canvas")[0];
     const canvas = jcanvas[0];
-    console.log("canvas", jcanvas, canvas);
+    //console.log("canvas", jcanvas, canvas);
     return canvas;
   }
 
@@ -898,7 +909,7 @@ export function funGraph() {
 
   function main() {
     const target = $('#stepContent');
-    console.log("target", target);
+    //console.log("target", target);
 
     resetTarget(target);
     const canvas = addCanvas(target);
@@ -935,5 +946,5 @@ function ctest(x) {
   console.log(esprima.parse(x));
 }
 
-ctest("const target = $('#stepContent')[0];");
-ctest("const $ = require('jquery')");
+//ctest("const target = $('#stepContent')[0];");
+//ctest("const $ = require('jquery')");
