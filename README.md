@@ -1,5 +1,28 @@
 # js-commander-example
 
+# Resources
+ - https://glebbahmutov.com/blog/test-if-a-function-is-pure-revisited/
+ - https://github.com/MithrilJS/mithril.js
+ - https://cycle.js.org/getting-started.html
+ - https://stackoverflow.com/questions/384286/javascript-isdom-how-do-you-check-if-a-javascript-object-is-a-dom-object
+
+# Pure function considerations
+
+This project handles pure javascript functions as first priority. This project
+is not a DOM handler. It does not contain a virtual DOM. For that you should
+use a DOM framework like Cycle.js that allows you to keep your functions pure.
+
+That being said, the project does consider any function call that is passed a
+DOM node as an argument as impure. There is a mechanism implemented that checks
+for changes to properties of DOM elements, for example canvas.width, and only
+recomputes on value change. Furthermore, there is a small list of standard
+API functions that are tagged pure, such as Math.sin, or impure, such as
+Math.random. This should suffice for some smaller codebase, but for real
+production codebase it is recommended to go with a framework like Cycle.js
+that allows you to sandbox DOM interaction and keep your functions pure.
+Either that or iterate over your called function list and tag functions as
+pure or impure.
+
 # Value tracking
 
 Value tracking allows a program to run incrementally, that is, with only
