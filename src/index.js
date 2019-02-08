@@ -380,6 +380,19 @@ function update(funGraph) {
   };*/
   window.App.funGraph = funGraph;
   funGraph.main(funGraph);
+  
+  if (window.App.loop === undefined) {
+    window.App.loopFunctions = [];
+    window.App.loop = function() {
+      for (var i = 0; i < window.App.loopFunctions.length; i++) {
+        window.App.loopFunctions[i]();
+      }
+      requestAnimationFrame(window.App.loop);
+    };
+    window.App.loop();
+  }
+  window.App.loopFunctions.length = 0;
+  //window.App.loopFunctions.push(() => funGraph.main(funGraph));
 }
 
 function inject(script) { 
