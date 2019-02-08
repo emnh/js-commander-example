@@ -1,5 +1,16 @@
 # js-commander-example
 
+# Goals
+ - Differential programming.
+  - All program history is represented and can be viewed by timeline.
+  - Bug fixes apply to all versions.
+ - Hot reloading. Only changes recomputed.
+
+# TODO
+ - Finish the example by not recalling addCanvas. Invent a mechanism for doing so.
+ - Figure out how does value tracking impact the example using cycle.js.
+ - Implement a WebGL wrapper for hot reloading.
+
 # Resources
  - https://glebbahmutov.com/blog/test-if-a-function-is-pure-revisited/
  - https://github.com/MithrilJS/mithril.js
