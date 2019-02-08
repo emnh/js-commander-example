@@ -142,7 +142,7 @@ const CallExpression = function(x, opts) {
   for (let i = 0; i < x.arguments.length; i++) {
   	t.arguments[3 + i] = x.arguments[i];
   }
-  //console.log("CALL", escodegen.generate(x), escodegen.generate(t));  
+  //console.log("CALL", escodegen.generate(x), escodegen.generate(t));
   return t;
 };
 
@@ -166,23 +166,23 @@ const ForInStatement = defaultHandler;
 
 const FunctionDeclaration = function(x, opts) {
   opts.register(x.id.name, '');
-  
+
   //x.body.body.unshift(t);
-  
+
   // Add _state as first parameter
   x.params.unshift(expr('_state'));
-  
+
   const t = esprima.parse('const A = function() {}; A.local = true;');
   const t2 = t.body[0];
-  
+
   t2.declarations[0].id = x.id;
   t2.declarations[0].init.params = x.params;
   t2.declarations[0].init.body = x.body;
   t.body[1].expression.left.object = x.id;
   //t.declarations[1].property.id = x.id;
-  
+
   //console.log("FUN", t); //, escodegen.generate(t));
-  
+
   return t;
 };
 
@@ -190,14 +190,14 @@ const FunctionExpression = defaultHandler;
 
 const Identifier = function(x, opts) {
   if (opts.libFunctions[x.name] !== undefined) {
-    
+
     //console.log("X", x);
-    
+
     if (!(x.parent.type === 'MemberExpression' && cmpNode(x.parent.property, x))) {
       const t = expr('_state.' + x.name);
       return t;
     }
-    
+
     /*
     let node = x;
     let isLeftMost = true;
@@ -209,12 +209,12 @@ const Identifier = function(x, opts) {
         break;
       }
     }*/
-    
-    //const t = 
+
+    //const t =
   }
   return x;
 };
-  
+
 const IfStatement = defaultHandler;
 const Import = defaultHandler;
 const ImportDeclaration = defaultHandler;
@@ -223,13 +223,13 @@ const ImportNamespaceSpecifier = defaultHandler;
 const ImportSpecifier = defaultHandler;
 
 const Literal = function(x, opts) {
-  
+
   if (x.parent.type === 'CallExpression' && x.parent.callee.name === webpackRequire) {
     return x;
   }
-  
+
   //console.log("LITERAL", x);
-  
+
   const list = opts.list;
   const localFunctions = opts.localFunctions;
   const idCounter = opts.idCounter;
@@ -259,22 +259,22 @@ const LabeledStatement = defaultHandler;
 const LogicalExpression = defaultHandler;
 const MemberExpression = function(x) {
   //console.log("MEMBER", escodegen.generate(x));
-  
+
   if (!x.computed) {
     //const t = expr('_state.fmember(X, Y)');
     //const t = expr('_state.fmember(X, Y)');
     //t.arguments[0] = x.object;
     //t.arguments[1] = expr('"' + x.property.name + '"');
-    
+
     const t = expr('_state.fcall(_state, _state.fmember, null, X, Y)');
     t.arguments[3 + 0] = x.object;
     t.arguments[3 + 1] = expr('"' + x.property.name + '"');
-    
+
     //t.arguments[1] = expr('null');
     //if (x.parent.type === 'MemberExpression') {
     //	t.arguments[1] = x.parent.object;
     //}
-    //console.log("MEMBER2", escodegen.generate(x), escodegen.generate(t));  
+    //console.log("MEMBER2", escodegen.generate(x), escodegen.generate(t));
     return t;
   } else {
     const t = expr('_state.fcall(_state, _state.fmember, null, X, Y)');
@@ -282,7 +282,7 @@ const MemberExpression = function(x) {
     t.arguments[3 + 1] = x.property;
     return t;
   }
-  
+
   return x;
 };
 const MetaProperty = defaultHandler;
@@ -311,7 +311,7 @@ const UpdateExpression = defaultHandler;
 function matchNode(toMatchNode, codeB) {
 
   //console.log("MATCHING", escodegen.generate(toMatchNode), codeB);
-  
+
   const matcher = (esprima.parse(codeB)).body[0];
 
   const newNode = function(node, parents, props) {
@@ -321,11 +321,11 @@ function matchNode(toMatchNode, codeB) {
       props: props
     };
   };
-  
+
   const getPath = function(x) {
     return x.props;
   };
-  
+
   const lookupSame = function(x) {
     let other = toMatchNode;
     for (let i = 0; i < x.props.length; i++) {
@@ -349,12 +349,12 @@ function matchNode(toMatchNode, codeB) {
   const pushProp = prop => p => {
     p.push(prop);
   };
-  
+
   let matchCount = 0;
   let nodeCount = 0;
-  
+
   const ret = {};
-  
+
   while (q.length > 0) {
     const top = q[0];
     q.shift();
@@ -366,7 +366,7 @@ function matchNode(toMatchNode, codeB) {
     } else {
       return null;
     }
-    
+
     //if () {
     if (top.props[top.props.length - 1] !== 'type' &&
         typeof top.node === 'string') {
@@ -375,7 +375,7 @@ function matchNode(toMatchNode, codeB) {
     }
     /*
     console.log(
-      "top", 
+      "top",
       getPath(top).join('/'),
       top.node,
       same);
@@ -404,7 +404,7 @@ function matchNode(toMatchNode, codeB) {
       }
     }
   }
-  
+
   //console.log("COUNT", nodeCount, matchCount);
 
   return ret;
@@ -418,7 +418,7 @@ const VariableDeclaration = function(x, opts) {
     //console.log(m.A);
     opts.libFunctions[m.A] = true;
     //opts.register(m.A, '');
-    
+
   	return {
       type: 'EmptyStatement'
     };
@@ -580,9 +580,9 @@ const liftFunction = function(numArgs, f, bindThis) {
       	}
         return x;
       });
-    
+
     //console.log("ARGS", args);
-    
+
    	//console.log("applying", f, "args", args);
     let ret = null;
     //console.log("bindThis", bindThis);
@@ -638,19 +638,21 @@ const fcall = function(_state, f, bindThis) {
   if (f.hasOwnProperty('lifted')) {
     f = f.value;
   }
-  
+
   const fdesc =
-    f.name !== undefined ?
+    f.name !== undefined &&
+    f.name.trim() !== '' ?
       f.name :
       f.toString();
-  
-  console.log("fcall", fdesc, args.map(x => {
-    if (typeof x === 'object' && x.hasOwnProperty('lifted')) {
-      return x.value;
-    }
-  	return x;  
-  }));
-  
+
+  const dargs =
+    args.map(x => {
+      if (typeof x === 'object' && x.hasOwnProperty('lifted')) {
+        return x.value;
+      }
+      return x;
+    });
+
   if (_state === undefined) {
     throw new Error('fcall with undefined _state');
   }
@@ -658,15 +660,27 @@ const fcall = function(_state, f, bindThis) {
   if (!f.hasOwnProperty('local')) {
     f = _state.liftFunction(null, f, bindThis);
   }
-  const ret = f.apply(bindThis, args);
-  if (typeof ret !== 'object' ||
-      (typeof ret === 'object' && !ret.hasOwnProperty('lifted'))) {
-    console.log('WARNING: lifting result returned by fcall');
-    return liftValue(ret, 0, '');
+
+  let ret = null;
+  try {
+  	ret = f.apply(bindThis, args);
+    if (typeof ret !== 'object' ||
+        (typeof ret === 'object' && !ret.hasOwnProperty('lifted'))) {
+      console.log('WARNING: lifting result returned by fcall');
+      return liftValue(ret, 0, '');
+    }
+	//ret.deps
+    const rdeps = ret.deps;
+    console.log("fcall", fdesc, dargs, '=>', ret.value, ['deps', ...rdeps]);
+  } catch (err) {
+    console.log("fcall", fdesc, dargs);
+    throw(err);
   }
   if (Number.isNaN(ret.value)) {
-    throw new Error('NaN returned by fcall: ' + of.name + ":" + ret.value.toString());
+    console.log('WARNING: NaN returned by fcall: ' + fdesc + ":" + ret.value.toString());
+    //throw new Error('NaN returned by fcall: ' + of.name + ":" + ret.value.toString());
   }
+
   //console.log("fcall ret", of.name, ret);
   return ret;
 };
@@ -829,7 +843,7 @@ export function addValueTrack(code, parsedContainer) {
 
   const libfuns =
         Object.keys(libFunctions).map(x => '  ' + x + ": liftValue(window.App." + x + ')');
-  
+
   const ret =
     '(function() {\n' +
   	(list.map(x => x.body)).join('\n\n') +
