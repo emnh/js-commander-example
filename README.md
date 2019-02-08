@@ -10,6 +10,7 @@
  - Finish the example by not recalling addCanvas. Invent a mechanism for doing so.
  - Figure out how does value tracking impact the example using cycle.js.
  - Implement a WebGL wrapper for hot reloading.
+ - Write live tutorial based on README explaining the concepts.
 
 # Resources
  - https://glebbahmutov.com/blog/test-if-a-function-is-pure-revisited/
