@@ -6,6 +6,18 @@
  - https://cycle.js.org/getting-started.html
  - https://stackoverflow.com/questions/384286/javascript-isdom-how-do-you-check-if-a-javascript-object-is-a-dom-object
 
+# Separation of concerns
+
+There are multiple more or less independent concerns when dealing with hot
+reloading and change propagation. These are:
+
+ - Stateless: JavaScript pure function computations
+ - Stateful: DOM
+ - Stateful: 2D Canvas
+ - Stateful: WebGL
+
+Value tracking deals only with the first concern.
+
 # Pure function considerations
 
 This project handles pure javascript functions as first priority. This project
