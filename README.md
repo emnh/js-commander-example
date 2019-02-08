@@ -23,6 +23,11 @@ that allows you to sandbox DOM interaction and keep your functions pure.
 Either that or iterate over your called function list and tag functions as
 pure or impure.
 
+You can change if the default setting is to consider unknown functions pure or
+impure. Considering an impure function pure will lead to not recomputing in
+spite of changes, while considering a pure function impure will recompute too
+much and waste computing resources.
+
 # Value tracking
 
 Value tracking allows a program to run incrementally, that is, with only
