@@ -18,6 +18,7 @@
  - https://cycle.js.org/getting-started.html
  - https://stackoverflow.com/questions/384286/javascript-isdom-how-do-you-check-if-a-javascript-object-is-a-dom-object
  - https://stackoverflow.com/questions/20983416/if-you-call-glbufferdata-after-already-calling-it-on-a-buffer-is-there-a-memory
+ - https://github.com/BabylonJS/Spector.js/blob/master/documentation/apis.md
 
 # Separation of concerns
 
