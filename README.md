@@ -6,6 +6,15 @@
   - Bug fixes apply to all versions.
  - Hot reloading. Only changes recomputed.
 
+# Usage scenarios
+ - A form of type checking? Differential type checking?
+ - Testing. Recording of tests.
+ - Watches. What caused value x to change? When did it change?
+ - Instant live coding updates.
+ - Separation of pure and impure functions.
+ - Configuration updates.
+ - Change propagation.
+
 # TODO
  - Finish the example by not recalling addCanvas. Invent a mechanism for doing so.
  - Figure out how does value tracking impact the example using cycle.js.
@@ -13,12 +22,32 @@
  - Write live tutorial based on README explaining the concepts.
 
 # Resources
+ - https://stackoverflow.com/questions/3202606/javascript-dependency-management
  - https://glebbahmutov.com/blog/test-if-a-function-is-pure-revisited/
  - https://github.com/MithrilJS/mithril.js
  - https://cycle.js.org/getting-started.html
  - https://stackoverflow.com/questions/384286/javascript-isdom-how-do-you-check-if-a-javascript-object-is-a-dom-object
  - https://stackoverflow.com/questions/20983416/if-you-call-glbufferdata-after-already-calling-it-on-a-buffer-is-there-a-memory
  - https://github.com/BabylonJS/Spector.js/blob/master/documentation/apis.md
+ - https://0fps.net/2012/07/12/smooth-voxel-terrain-part-2/
+ - https://github.com/tdhooper/glsl-marching-cubes
+ - https://www.miaumiau.cat/2017/01/gpu-marching-cubes-from-particle-clouds-in-webgl-part-2-marching-cubes-steps/
+ - https://stemkoski.github.io/Three.js/Marching-Cubes.html
+ - http://dev.miaumiau.cat/sph/
+ - https://directtovideo.wordpress.com/2011/05/03/numb-res/
+ - https://github.com/Scrawk/Marching-Cubes-On-The-GPU
+ - http://stack.gl/packages/
+ - https://github.com/stackgl/glsl-transpiler
+ - https://github.com/tunabrain/gpu-fluid (histopyramids, but C++)
+ - https://github.com/smistad/GPU-Marching-Cubes
+ - https://folk.uio.no/erikd/histo/hpmarchertalk.pdf
+ - https://github.com/sintefmath/hpmc
+ - https://www.youtube.com/watch?v=zdTcAg_G0Go
+ - https://github.com/rlguy/GridFluidSim3D
+ - https://github.com/shrekshao/MoveWebGL1EngineToWebGL2/blob/master/Move-a-WebGL-1-Engine-To-WebGL-2-Blog-1.md
+ - https://fluxml.ai/2019/02/07/what-is-differentiable-programming.html
+ - https://en.wikipedia.org/wiki/Newton%27s_method
+ - https://github.com/FluxML/Zygote.jl
 
 # Separation of concerns
 
