@@ -46,8 +46,14 @@
  - https://github.com/rlguy/GridFluidSim3D
  - https://github.com/shrekshao/MoveWebGL1EngineToWebGL2/blob/master/Move-a-WebGL-1-Engine-To-WebGL-2-Blog-1.md
  - https://fluxml.ai/2019/02/07/what-is-differentiable-programming.html
+ - https://arxiv.org/abs/1810.07951
  - https://en.wikipedia.org/wiki/Newton%27s_method
  - https://github.com/FluxML/Zygote.jl
+ - https://github.com/iffsid/ad.js#readme
+ - https://github.com/ehaas/js-autodiff
+ - https://en.wikipedia.org/wiki/Automatic_differentiation
+ - http://sunnyday.mit.edu/16.355/wirth-refinement.html
+ - https://en.wikipedia.org/wiki/Monad_(functional_programming)
 
 # Separation of concerns
 
