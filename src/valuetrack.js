@@ -560,7 +560,8 @@ const identity = function(x) {
 const liftFunction = function(numArgs, f, bindThis) {
   // skipAddValueTrack
   if (f.hasOwnProperty('lifted') && isFunction(f.value)) {
-    f = f.value;
+    throw new Error('attempting to lift wrapped function');
+    //f = f.value;
   }
   if (!isFunction(f)) {
     console.log("WARNING: f is not a function", f);
