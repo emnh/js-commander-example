@@ -37,7 +37,7 @@
     "jquery-ui": "^1.12.1",
     "jquery.fancytree": "^2.30.2",
     "jshint": "^2.10.0",
-    "three": "^0.101.1",
+    "three": "^0.137.0",
     "throttle-debounce": "^2.1.0",
     "ui-contextmenu": "^1.18.1",
     "webpack": "^4.29.0",
